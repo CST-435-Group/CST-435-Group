@@ -1,0 +1,16 @@
+{
+  "fruit_names": [
+    "Apple",
+    "Tomato",
+    "Pear",
+    "Peach",
+    "Cherry"
+  ],
+  "num_classes": 5,
+  "test_accuracy": 0.996,
+  "best_val_accuracy": 0.9973333333333333,
+  "total_images": 5000,
+  "train_size": 3500,
+  "val_size": 750,
+  "test_size": 750
+}
