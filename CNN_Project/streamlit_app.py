@@ -1,12 +1,11 @@
 """
-Fruit Image Classification - Streamlit App
+Fruit Image Classification - Streamlit App (Enhanced with Tabs)
 CST-435 Neural Networks Assignment
 
 This app:
-- Loads the trained CNN model
-- Shows model accuracy
-- Displays 10 test images at a time with predictions
-- Shows correct/incorrect classifications
+- Tab 1: Interactive demo with 10 random images
+- Tab 2: Complete model analytics
+- Tab 3: README documentation
 """
 
 import streamlit as st
@@ -18,6 +17,11 @@ import json
 import numpy as np
 from pathlib import Path
 import random
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
+from tqdm import tqdm
 
 # Page configuration
 st.set_page_config(
@@ -107,6 +111,15 @@ def load_dataset_info():
         st.error(f"Error loading dataset: {e}")
         return None
 
+@st.cache_data
+def load_training_history():
+    """Load training history"""
+    try:
+        with open('models/training_history.json', 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        return None
+
 def preprocess_image(image_path):
     """Preprocess image for model input"""
     img = Image.open(image_path).convert('L')  # Grayscale
@@ -124,60 +137,56 @@ def predict(model, image_tensor):
         confidence = probabilities[0][pred_class].item()
     return pred_class, confidence, probabilities[0].numpy()
 
-# --------------------------
-# Streamlit App
-# --------------------------
-def main():
-    # Load model and data
-    model, model_metadata, checkpoint = load_model()
-    dataset_info = load_dataset_info()
+@st.cache_data
+def analyze_all_images(_model, image_paths, labels, fruit_names):
+    """Run prediction on all images and return analytics"""
+    all_predictions = []
+    all_true_labels = []
+    all_confidences = []
+    misclassified = []
     
-    if dataset_info is None:
-        st.stop()
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
+    for idx, (img_path, true_label) in enumerate(zip(image_paths, labels)):
+        # Update progress
+        progress = (idx + 1) / len(image_paths)
+        progress_bar.progress(progress)
+        status_text.text(f"Analyzing image {idx + 1} of {len(image_paths)}...")
+        
+        # Make prediction
+        img_tensor, _ = preprocess_image(img_path)
+        pred_class, confidence, _ = predict(_model, img_tensor)
+        
+        all_predictions.append(pred_class)
+        all_true_labels.append(true_label)
+        all_confidences.append(confidence)
+        
+        # Track misclassifications
+        if pred_class != true_label:
+            misclassified.append({
+                'image_path': img_path,
+                'true_label': fruit_names[true_label],
+                'predicted': fruit_names[pred_class],
+                'confidence': confidence
+            })
+    
+    progress_bar.empty()
+    status_text.empty()
+    
+    return all_predictions, all_true_labels, all_confidences, misclassified
+
+# --------------------------
+# Tab 1: Interactive Demo
+# --------------------------
+def demo_tab(model, model_metadata, dataset_info):
+    """Interactive demo with 10 random images"""
     fruit_names = model_metadata['fruit_names']
-    
-    # Title and Header
-    st.title("🍎 Fruit Image Classifier")
-    st.markdown("### CNN Model for Fruit Classification")
-    st.markdown("---")
-    
-    # Sidebar - Model Info
-    with st.sidebar:
-        st.header("📊 Model Information")
-        st.metric("Test Accuracy", f"{model_metadata['test_accuracy']*100:.2f}%")
-        st.metric("Best Val Accuracy", f"{model_metadata['best_val_accuracy']*100:.2f}%")
-        st.metric("Number of Classes", model_metadata['num_classes'])
-        
-        st.markdown("### 🍎 Fruit Categories")
-        for i, fruit in enumerate(fruit_names, 1):
-            st.markdown(f"{i}. **{fruit}**")
-        
-        st.markdown("---")
-        st.markdown("### 📈 Dataset Info")
-        st.metric("Total Images", model_metadata['total_images'])
-        st.metric("Training Images", model_metadata['train_size'])
-        st.metric("Validation Images", model_metadata['val_size'])
-        st.metric("Test Images", model_metadata['test_size'])
-        
-        st.markdown("---")
-        st.markdown("### 🔧 Model Architecture")
-        st.markdown("""
-        - Input: 128×128 Grayscale
-        - 3 Convolutional Blocks
-        - 32 → 64 → 128 filters
-        - Max Pooling after each block
-        - 2 Fully Connected layers
-        - Dropout (0.5) for regularization
-        """)
-    
-    # Main content
-    st.header("🖼️ Image Classification Demo")
-    st.markdown("View 10 random test images with their predictions")
-    
-    # Get test images
     image_paths = dataset_info['image_paths']
     labels = dataset_info['labels']
+    
+    st.header("🖼️ Image Classification Demo")
+    st.markdown("View 10 random test images with their predictions")
     
     # Session state for random selection
     if 'current_batch' not in st.session_state:
@@ -224,7 +233,7 @@ def main():
             
             # Display in column
             with cols[col_idx]:
-                # Show image - FIXED: use_container_width instead of use_column_width
+                # Show image
                 st.image(img, use_container_width=True)
                 
                 # Show prediction with color coding
@@ -237,7 +246,7 @@ def main():
                     st.caption(f"Confidence: {confidence*100:.1f}%")
                 
                 # Show top 3 predictions
-                with st.expander("Top 3 Predictions"):
+                with st.expander("Top 3"):
                     top3_indices = np.argsort(probabilities)[-3:][::-1]
                     for i, class_idx in enumerate(top3_indices):
                         prob = probabilities[class_idx]
@@ -257,11 +266,10 @@ def main():
     with col4:
         st.metric("Total in Batch", len(selected_indices))
     
-    # Detailed Results
+    # Detailed Results Table
     st.markdown("---")
-    st.header("📊 Detailed Results")
+    st.subheader("📊 Detailed Results")
     
-    # Create a table of results
     results_data = []
     for img_idx in selected_indices:
         img_path = image_paths[img_idx]
@@ -281,9 +289,285 @@ def main():
             'Correct': '✅' if is_correct else '❌'
         })
     
-    import pandas as pd
     results_df = pd.DataFrame(results_data)
     st.dataframe(results_df, use_container_width=True)
+
+# --------------------------
+# Tab 2: Analytics
+# --------------------------
+def analytics_tab(model, model_metadata, dataset_info):
+    """Complete model analytics on all images"""
+    fruit_names = model_metadata['fruit_names']
+    image_paths = dataset_info['image_paths']
+    labels = dataset_info['labels']
+    
+    st.header("📊 Complete Model Analytics")
+    st.markdown("Comprehensive analysis of model performance on all images")
+    
+    # Initialize session state
+    if 'analytics_complete' not in st.session_state:
+        st.session_state.analytics_complete = False
+    
+    # Show appropriate button based on state
+    if not st.session_state.analytics_complete:
+        # Not analyzed yet - show info and button
+        st.info(f"📊 Click the button below to analyze all {len(image_paths)} images")
+        st.warning("⏱️ This may take a few minutes depending on dataset size")
+        
+        if st.button("🔍 Run Full Analysis", type="primary", use_container_width=True):
+            with st.spinner("Analyzing all images... Please wait..."):
+                predictions, true_labels, confidences, misclassified = analyze_all_images(
+                    model, image_paths, labels, fruit_names
+                )
+                
+                # Store in session state
+                st.session_state.predictions = predictions
+                st.session_state.true_labels = true_labels
+                st.session_state.confidences = confidences
+                st.session_state.misclassified = misclassified
+                st.session_state.analytics_complete = True
+                st.rerun()
+    
+    else:
+        # Analysis complete - show results and option to rerun
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.success("✅ Analysis complete! Results shown below.")
+        with col2:
+            if st.button("🔄 Rerun Analysis", type="secondary"):
+                st.session_state.analytics_complete = False
+                st.rerun()
+        
+        
+        predictions = st.session_state.predictions
+        true_labels = st.session_state.true_labels
+        confidences = st.session_state.confidences
+        misclassified = st.session_state.misclassified
+        
+        # Overall metrics
+        st.markdown("---")
+        st.subheader("🎯 Overall Performance")
+        
+        overall_acc = accuracy_score(true_labels, predictions)
+        avg_confidence = np.mean(confidences)
+        correct_count = sum(1 for t, p in zip(true_labels, predictions) if t == p)
+        incorrect_count = len(true_labels) - correct_count
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Overall Accuracy", f"{overall_acc*100:.2f}%")
+        with col2:
+            st.metric("Avg Confidence", f"{avg_confidence*100:.2f}%")
+        with col3:
+            st.metric("Correct", correct_count)
+        with col4:
+            st.metric("Incorrect", incorrect_count)
+        
+        # Confusion Matrix
+        st.markdown("---")
+        st.subheader("🔢 Confusion Matrix")
+        
+        cm = confusion_matrix(true_labels, predictions)
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                    xticklabels=fruit_names, yticklabels=fruit_names,
+                    ax=ax, cbar_kws={'label': 'Count'})
+        ax.set_xlabel('Predicted Label')
+        ax.set_ylabel('True Label')
+        ax.set_title('Confusion Matrix')
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # Per-Class Metrics
+        st.markdown("---")
+        st.subheader("📈 Per-Class Performance")
+        
+        report = classification_report(true_labels, predictions, 
+                                       target_names=fruit_names, 
+                                       output_dict=True)
+        
+        # Create DataFrame
+        per_class_data = []
+        for fruit in fruit_names:
+            per_class_data.append({
+                'Fruit': fruit,
+                'Precision': f"{report[fruit]['precision']*100:.2f}%",
+                'Recall': f"{report[fruit]['recall']*100:.2f}%",
+                'F1-Score': f"{report[fruit]['f1-score']*100:.2f}%",
+                'Support': int(report[fruit]['support'])
+            })
+        
+        per_class_df = pd.DataFrame(per_class_data)
+        st.dataframe(per_class_df, use_container_width=True)
+        
+        # Confidence Distribution
+        st.markdown("---")
+        st.subheader("📊 Confidence Distribution")
+        
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.hist(confidences, bins=50, edgecolor='black', alpha=0.7)
+        ax.set_xlabel('Confidence')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Distribution of Prediction Confidences')
+        ax.axvline(avg_confidence, color='red', linestyle='--', 
+                   label=f'Mean: {avg_confidence:.3f}')
+        ax.legend()
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # Training History (if available)
+        history = load_training_history()
+        if history:
+            st.markdown("---")
+            st.subheader("📉 Training History")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Loss curve
+                fig, ax = plt.subplots(figsize=(8, 5))
+                epochs = range(1, len(history['train_loss']) + 1)
+                ax.plot(epochs, history['train_loss'], 'b-', label='Training Loss')
+                ax.plot(epochs, history['val_loss'], 'r-', label='Validation Loss')
+                ax.set_xlabel('Epoch')
+                ax.set_ylabel('Loss')
+                ax.set_title('Training and Validation Loss')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                plt.tight_layout()
+                st.pyplot(fig)
+            
+            with col2:
+                # Accuracy curve
+                fig, ax = plt.subplots(figsize=(8, 5))
+                ax.plot(epochs, [acc*100 for acc in history['train_acc']], 
+                       'b-', label='Training Accuracy')
+                ax.plot(epochs, [acc*100 for acc in history['val_acc']], 
+                       'r-', label='Validation Accuracy')
+                ax.set_xlabel('Epoch')
+                ax.set_ylabel('Accuracy (%)')
+                ax.set_title('Training and Validation Accuracy')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                plt.tight_layout()
+                st.pyplot(fig)
+        
+        # Misclassification Analysis
+        st.markdown("---")
+        st.subheader("❌ Misclassification Analysis")
+        
+        st.metric("Total Misclassified", len(misclassified))
+        
+        if len(misclassified) > 0:
+            # Show worst misclassifications (highest confidence but wrong)
+            st.markdown("#### Top 10 Most Confident Mistakes")
+            
+            sorted_mistakes = sorted(misclassified, 
+                                    key=lambda x: x['confidence'], 
+                                    reverse=True)[:10]
+            
+            mistake_data = []
+            for mistake in sorted_mistakes:
+                mistake_data.append({
+                    'Image': Path(mistake['image_path']).name,
+                    'True Label': mistake['true_label'],
+                    'Predicted': mistake['predicted'],
+                    'Confidence': f"{mistake['confidence']*100:.1f}%"
+                })
+            
+            mistake_df = pd.DataFrame(mistake_data)
+            st.dataframe(mistake_df, use_container_width=True)
+            
+            # Show sample misclassifications
+            st.markdown("#### Sample Misclassified Images")
+            
+            num_samples = min(10, len(sorted_mistakes))
+            cols = st.columns(5)
+            
+            for i in range(num_samples):
+                col_idx = i % 5
+                mistake = sorted_mistakes[i]
+                
+                with cols[col_idx]:
+                    img = Image.open(mistake['image_path']).convert('L')
+                    st.image(img, use_container_width=True)
+                    st.caption(f"True: {mistake['true_label']}")
+                    st.caption(f"Pred: {mistake['predicted']}")
+                    st.caption(f"Conf: {mistake['confidence']*100:.1f}%")
+
+# --------------------------
+# Tab 3: README
+# --------------------------
+def readme_tab():
+    """Display README documentation"""
+    st.header("📖 README Documentation")
+    
+    try:
+        with open('README.md', 'r', encoding='utf-8') as f:
+            readme_content = f.read()
+        st.markdown(readme_content)
+    except FileNotFoundError:
+        st.error("README.md not found in the project directory")
+        st.info("Please ensure README.md exists in the same directory as this script")
+
+# --------------------------
+# Main App with Sidebar
+# --------------------------
+def main():
+    # Load model and data
+    model, model_metadata, checkpoint = load_model()
+    dataset_info = load_dataset_info()
+    
+    if dataset_info is None:
+        st.stop()
+    
+    fruit_names = model_metadata['fruit_names']
+    
+    # Title
+    st.title("🍎 Fruit Image Classifier")
+    st.markdown("### CNN Model for Fruit Classification - CST-435 Assignment")
+    
+    # Sidebar - Model Info
+    with st.sidebar:
+        st.header("📊 Model Information")
+        st.metric("Test Accuracy", f"{model_metadata['test_accuracy']*100:.2f}%")
+        st.metric("Best Val Accuracy", f"{model_metadata['best_val_accuracy']*100:.2f}%")
+        st.metric("Number of Classes", model_metadata['num_classes'])
+        
+        st.markdown("### 🍎 Fruit Categories")
+        for i, fruit in enumerate(fruit_names, 1):
+            st.markdown(f"{i}. **{fruit}**")
+        
+        st.markdown("---")
+        st.markdown("### 📈 Dataset Info")
+        st.metric("Total Images", model_metadata['total_images'])
+        st.metric("Training Images", model_metadata['train_size'])
+        st.metric("Validation Images", model_metadata['val_size'])
+        st.metric("Test Images", model_metadata['test_size'])
+        
+        st.markdown("---")
+        st.markdown("### 🔧 Model Architecture")
+        st.markdown("""
+        - Input: 128×128 Grayscale
+        - 3 Convolutional Blocks
+        - 32 → 64 → 128 filters
+        - Max Pooling after each block
+        - 2 FC layers + Dropout
+        - ~8.5M parameters
+        """)
+    
+    # Create tabs
+    tab1, tab2, tab3 = st.tabs(["🖼️ Demo", "📊 Analytics", "📖 README"])
+    
+    with tab1:
+        demo_tab(model, model_metadata, dataset_info)
+    
+    with tab2:
+        analytics_tab(model, model_metadata, dataset_info)
+    
+    with tab3:
+        readme_tab()
     
     # Footer
     st.markdown("---")
