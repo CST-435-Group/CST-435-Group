@@ -1,11 +1,12 @@
 """
-Fruit Image Classification - Streamlit App (Enhanced with Tabs)
+Fruit Image Classification - Streamlit App (Enhanced with 4 Tabs)
 CST-435 Neural Networks Assignment
 
 This app:
 - Tab 1: Interactive demo with 10 random images
-- Tab 2: Complete model analytics
-- Tab 3: README documentation
+- Tab 2: Upload your own images for prediction
+- Tab 3: Complete model analytics
+- Tab 4: README documentation
 """
 
 import streamlit as st
@@ -22,6 +23,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
 from tqdm import tqdm
+import io
 
 # Page configuration
 st.set_page_config(
@@ -127,6 +129,28 @@ def preprocess_image(image_path):
     img_array = (img_array - 0.5) / 0.5  # Standardize
     img_tensor = torch.FloatTensor(img_array).unsqueeze(0).unsqueeze(0)
     return img_tensor, img
+
+def preprocess_uploaded_image(uploaded_file):
+    """Preprocess uploaded image for model input"""
+    # Open image from uploaded file
+    img = Image.open(uploaded_file)
+    
+    # Convert to RGB first (handles various formats including PNG with alpha)
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+    
+    # Convert to grayscale
+    img_gray = img.convert('L')
+    
+    # Resize to 128x128
+    img_resized = img_gray.resize((128, 128), Image.Resampling.LANCZOS)
+    
+    # Normalize and standardize for model
+    img_array = np.array(img_resized) / 255.0
+    img_array = (img_array - 0.5) / 0.5
+    img_tensor = torch.FloatTensor(img_array).unsqueeze(0).unsqueeze(0)
+    
+    return img_tensor, img, img_resized
 
 def predict(model, image_tensor):
     """Make prediction"""
@@ -293,7 +317,126 @@ def demo_tab(model, model_metadata, dataset_info):
     st.dataframe(results_df, use_container_width=True)
 
 # --------------------------
-# Tab 2: Analytics
+# Tab 2: Upload & Predict
+# --------------------------
+def upload_tab(model, model_metadata):
+    """Upload and predict custom images"""
+    fruit_names = model_metadata['fruit_names']
+    
+    st.header("📤 Upload & Predict")
+    st.markdown("Upload your own fruit images to see what the model predicts!")
+    
+    # File uploader
+    st.markdown("### Upload an Image")
+    uploaded_files = st.file_uploader(
+        "Drag and drop image(s) here or click to browse",
+        type=['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'],
+        accept_multiple_files=True,
+        help="Upload fruit images to classify. Supports PNG, JPG, JPEG, BMP, GIF, WebP"
+    )
+    
+    if uploaded_files:
+        st.markdown("---")
+        st.subheader(f"📊 Results ({len(uploaded_files)} image(s) uploaded)")
+        
+        # Process each uploaded file
+        for idx, uploaded_file in enumerate(uploaded_files):
+            st.markdown(f"### Image {idx + 1}: {uploaded_file.name}")
+            
+            col1, col2, col3 = st.columns([1, 1, 1])
+            
+            try:
+                # Preprocess image
+                img_tensor, original_img, processed_img = preprocess_uploaded_image(uploaded_file)
+                
+                # Make prediction
+                pred_class, confidence, probabilities = predict(model, img_tensor)
+                pred_fruit = fruit_names[pred_class]
+                
+                # Display original image
+                with col1:
+                    st.markdown("**Original Image**")
+                    st.image(original_img, use_container_width=True)
+                    st.caption(f"Size: {original_img.size[0]}×{original_img.size[1]}")
+                
+                # Display processed image
+                with col2:
+                    st.markdown("**Processed (128×128 Grayscale)**")
+                    st.image(processed_img, use_container_width=True)
+                    st.caption("Ready for model input")
+                
+                # Display prediction
+                with col3:
+                    st.markdown("**Prediction**")
+                    st.success(f"### 🍎 {pred_fruit}")
+                    st.metric("Confidence", f"{confidence*100:.1f}%")
+                    
+                    # Progress bar for confidence
+                    st.progress(confidence)
+                    
+                    # Top 3 predictions
+                    st.markdown("**Top 3 Predictions:**")
+                    top3_indices = np.argsort(probabilities)[-3:][::-1]
+                    for i, class_idx in enumerate(top3_indices):
+                        prob = probabilities[class_idx]
+                        fruit = fruit_names[class_idx]
+                        if i == 0:
+                            st.markdown(f"🥇 **{fruit}**: {prob*100:.1f}%")
+                        elif i == 1:
+                            st.markdown(f"🥈 {fruit}: {prob*100:.1f}%")
+                        else:
+                            st.markdown(f"🥉 {fruit}: {prob*100:.1f}%")
+                
+                # Probability distribution chart
+                st.markdown("**Probability Distribution**")
+                fig, ax = plt.subplots(figsize=(10, 4))
+                colors = ['green' if i == pred_class else 'lightblue' for i in range(len(fruit_names))]
+                ax.barh(fruit_names, probabilities * 100, color=colors)
+                ax.set_xlabel('Probability (%)')
+                ax.set_title(f'Prediction Probabilities for "{uploaded_file.name}"')
+                ax.set_xlim(0, 100)
+                for i, v in enumerate(probabilities * 100):
+                    ax.text(v + 1, i, f'{v:.1f}%', va='center')
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+                st.markdown("---")
+                
+            except Exception as e:
+                st.error(f"Error processing {uploaded_file.name}: {str(e)}")
+                st.markdown("---")
+    
+    else:
+        # Show instructions when no file is uploaded
+        st.info("👆 Upload one or more images to get started!")
+        
+        st.markdown("""
+        ### 📝 Instructions:
+        1. **Click** the upload box above or **drag and drop** image files
+        2. Upload fruit images (supports multiple files)
+        3. See the **original** and **processed** (128×128 grayscale) versions
+        4. Get **instant predictions** with confidence scores
+        5. View probability distribution across all fruit classes
+        
+        ### 📁 Supported Formats:
+        - PNG, JPG, JPEG, BMP, GIF, WebP
+        - Any image size (automatically resized)
+        - Color or grayscale images
+        
+        ### 💡 Tips for Best Results:
+        - Use clear, well-lit fruit images
+        - Center the fruit in the frame
+        - Avoid cluttered backgrounds
+        - Try different angles and varieties
+        
+        ### 🍎 Supported Fruits:
+        """)
+        
+        for i, fruit in enumerate(fruit_names, 1):
+            st.markdown(f"{i}. **{fruit}**")
+
+# --------------------------
+# Tab 3: Analytics
 # --------------------------
 def analytics_tab(model, model_metadata, dataset_info):
     """Complete model analytics on all images"""
@@ -497,7 +640,7 @@ def analytics_tab(model, model_metadata, dataset_info):
                     st.caption(f"Conf: {mistake['confidence']*100:.1f}%")
 
 # --------------------------
-# Tab 3: README
+# Tab 4: README
 # --------------------------
 def readme_tab():
     """Display README documentation"""
@@ -558,15 +701,18 @@ def main():
         """)
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["🖼️ Demo", "📊 Analytics", "📖 README"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🖼️ Demo", "📤 Upload & Predict", "📊 Analytics", "📖 README"])
     
     with tab1:
         demo_tab(model, model_metadata, dataset_info)
     
     with tab2:
-        analytics_tab(model, model_metadata, dataset_info)
+        upload_tab(model, model_metadata)
     
     with tab3:
+        analytics_tab(model, model_metadata, dataset_info)
+    
+    with tab4:
         readme_tab()
     
     # Footer
