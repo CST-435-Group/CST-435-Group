@@ -169,7 +169,7 @@ def load_model():
 def load_dataset_info():
     """Load dataset information"""
     try:
-        data_path = Path('data') / 'dataset_metadata.json'
+        data_path = Path(__file__).parent / 'data' / 'dataset_metadata.json'
         j = json.loads(data_path.read_text())
 
         # Normalize image paths to be OS-native and absolute where possible
