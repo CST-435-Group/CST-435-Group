@@ -212,7 +212,7 @@ def load_dataset_info():
 def load_training_history():
     """Load training history"""
     try:
-        with open('data/training_history.json', 'r') as f:
+        with open(Path(__file__).parent / 'data' / 'training_history.json', 'r') as f:
             return json.load(f)
     except Exception as e:
         return None
@@ -684,7 +684,11 @@ def readme_tab():
     st.header("📖 README Documentation")
     
     try:
-        with open('README.md', 'r', encoding='utf-8') as f:
+        readme_path = Path(__file__).parent / 'README.md'
+        with open(readme_path, 'r', encoding='utf-8') as f:
+        readme_content = f.read()
+        with open(readme_path, 'r', encoding='utf-8') as f:
+        with open(readme_path, 'r', encoding='utf-8') as f:
             readme_content = f.read()
         st.markdown(readme_content)
     except FileNotFoundError:
