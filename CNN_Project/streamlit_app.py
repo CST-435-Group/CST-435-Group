@@ -85,12 +85,73 @@ class FruitCNN(nn.Module):
 def load_model():
     """Load the trained model"""
     try:
+        # Resolve base directory relative to this script to avoid issues with working dir during deployment
+        base_dir = Path(__file__).resolve().parent
+
+        # If deployment provides a MODEL_DIR env var, prefer it first
+        model_dir_env = None
+        try:
+            import os
+            model_dir_env = os.getenv('MODEL_DIR')
+        except Exception:
+            model_dir_env = None
+
+        metadata_path_candidates = []
+        checkpoint_path_candidates = []
+
+        if model_dir_env:
+            env_path = Path(model_dir_env)
+            metadata_path_candidates.append(env_path / 'model_metadata.json')
+            checkpoint_path_candidates.append(env_path / 'best_model.pth')
+
+        # Try common locations for metadata and checkpoint (prefer models/ under the project)
+        metadata_path_candidates.extend([base_dir / 'models' / 'model_metadata.json', base_dir / 'data' / 'model_metadata.json', base_dir / 'model_metadata.json'])
+        checkpoint_path_candidates.extend([base_dir / 'models' / 'best_model.pth', base_dir / 'data' / 'best_model.pth', base_dir / 'best_model.pth'])
+
+        metadata_path = None
+        for p in metadata_path_candidates:
+            if p.exists():
+                metadata_path = p
+                break
+
+        checkpoint_path = None
+        for p in checkpoint_path_candidates:
+            if p.exists():
+                checkpoint_path = p
+                break
+
+        if metadata_path is None or checkpoint_path is None:
+            # Build helpful diagnostic info
+            checked = [str(p) for p in (metadata_path_candidates + checkpoint_path_candidates)]
+            # List files present under base_dir and models dir to aid debugging
+            present_files = []
+            try:
+                for f in sorted([str(p) for p in base_dir.iterdir()]):
+                    present_files.append(f)
+            except Exception:
+                present_files = []
+
+            models_dir = base_dir / 'models'
+            models_list = []
+            if models_dir.exists() and models_dir.is_dir():
+                try:
+                    for f in sorted([str(p) for p in models_dir.iterdir()]):
+                        models_list.append(f)
+                except Exception:
+                    models_list = []
+
+            raise FileNotFoundError(
+                "Could not find model files. Paths checked: {}. Files at project root: {}. Files in models/: {}".format(
+                    ', '.join(checked), ', '.join(present_files) or '(<none>)', ', '.join(models_list) or '(<none>)'
+                )
+            )
+
         # Load metadata
-        with open('models/model_metadata.json', 'r') as f:
+        with open(metadata_path, 'r') as f:
             metadata = json.load(f)
-        
+
         # Load model checkpoint
-        checkpoint = torch.load('models/best_model.pth', map_location='cpu')
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
         
         # Create model
         model = FruitCNN(num_classes=metadata['num_classes'])
@@ -99,8 +160,9 @@ def load_model():
         
         return model, metadata, checkpoint
     except Exception as e:
+        # Provide clearer guidance depending on error
         st.error(f"Error loading model: {e}")
-        st.error("Please run train_model.py first to train the model!")
+        st.error("Ensure your model files exist. Expected files: 'models/model_metadata.json' and 'models/best_model.pth' or under 'data/' directory.")
         st.stop()
 
 @st.cache_data
@@ -150,7 +212,7 @@ def load_dataset_info():
 def load_training_history():
     """Load training history"""
     try:
-        with open('models/training_history.json', 'r') as f:
+        with open('data/training_history.json', 'r') as f:
             return json.load(f)
     except Exception as e:
         return None
@@ -355,118 +417,14 @@ def demo_tab(model, model_metadata, dataset_info):
 def upload_tab(model, model_metadata):
     """Upload and predict custom images"""
     fruit_names = model_metadata['fruit_names']
-    
+    # Upload feature has been disabled. Show informational message instead.
     st.header("📤 Upload & Predict")
-    st.markdown("Upload your own fruit images to see what the model predicts!")
+    st.warning("The upload feature has been disabled in this app.")
+    st.markdown("If you need to classify images, please use the Demo tab or re-enable uploads in the source code.")
     
-    # File uploader
-    st.markdown("### Upload an Image")
-    uploaded_files = st.file_uploader(
-        "Drag and drop image(s) here or click to browse",
-        type=['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'],
-        accept_multiple_files=True,
-        help="Upload fruit images to classify. Supports PNG, JPG, JPEG, BMP, GIF, WebP"
-    )
-    
-    if uploaded_files:
-        st.markdown("---")
-        st.subheader(f"📊 Results ({len(uploaded_files)} image(s) uploaded)")
-        
-        # Process each uploaded file
-        for idx, uploaded_file in enumerate(uploaded_files):
-            st.markdown(f"### Image {idx + 1}: {uploaded_file.name}")
-            
-            col1, col2, col3 = st.columns([1, 1, 1])
-            
-            try:
-                # Preprocess image
-                img_tensor, original_img, processed_img = preprocess_uploaded_image(uploaded_file)
-                
-                # Make prediction
-                pred_class, confidence, probabilities = predict(model, img_tensor)
-                pred_fruit = fruit_names[pred_class]
-                
-                # Display original image
-                with col1:
-                    st.markdown("**Original Image**")
-                    st.image(original_img)
-                    st.caption(f"Size: {original_img.size[0]}×{original_img.size[1]}")
-                
-                # Display processed image
-                with col2:
-                    st.markdown("**Processed (128×128 Grayscale)**")
-                    st.image(processed_img)
-                    st.caption("Ready for model input")
-                
-                # Display prediction
-                with col3:
-                    st.markdown("**Prediction**")
-                    st.success(f"### 🍎 {pred_fruit}")
-                    st.metric("Confidence", f"{confidence*100:.1f}%")
-                    
-                    # Progress bar for confidence
-                    st.progress(confidence)
-                    
-                    # Top 3 predictions
-                    st.markdown("**Top 3 Predictions:**")
-                    top3_indices = np.argsort(probabilities)[-3:][::-1]
-                    for i, class_idx in enumerate(top3_indices):
-                        prob = probabilities[class_idx]
-                        fruit = fruit_names[class_idx]
-                        if i == 0:
-                            st.markdown(f"🥇 **{fruit}**: {prob*100:.1f}%")
-                        elif i == 1:
-                            st.markdown(f"🥈 {fruit}: {prob*100:.1f}%")
-                        else:
-                            st.markdown(f"🥉 {fruit}: {prob*100:.1f}%")
-                
-                # Probability distribution chart
-                st.markdown("**Probability Distribution**")
-                fig, ax = plt.subplots(figsize=(10, 4))
-                colors = ['green' if i == pred_class else 'lightblue' for i in range(len(fruit_names))]
-                ax.barh(fruit_names, probabilities * 100, color=colors)
-                ax.set_xlabel('Probability (%)')
-                ax.set_title(f'Prediction Probabilities for "{uploaded_file.name}"')
-                ax.set_xlim(0, 100)
-                for i, v in enumerate(probabilities * 100):
-                    ax.text(v + 1, i, f'{v:.1f}%', va='center')
-                plt.tight_layout()
-                st.pyplot(fig)
-                
-                st.markdown("---")
-                
-            except Exception as e:
-                st.error(f"Error processing {uploaded_file.name}: {str(e)}")
-                st.markdown("---")
-    
-    else:
-        # Show instructions when no file is uploaded
-        st.info("👆 Upload one or more images to get started!")
-        
-        st.markdown("""
-        ### 📝 Instructions:
-        1. **Click** the upload box above or **drag and drop** image files
-        2. Upload fruit images (supports multiple files)
-        3. See the **original** and **processed** (128×128 grayscale) versions
-        4. Get **instant predictions** with confidence scores
-        5. View probability distribution across all fruit classes
-        
-        ### 📁 Supported Formats:
-        - PNG, JPG, JPEG, BMP, GIF, WebP
-        - Any image size (automatically resized)
-        - Color or grayscale images
-        
-        ### 💡 Tips for Best Results:
-        - Use clear, well-lit fruit images
-        - Center the fruit in the frame
-        - Avoid cluttered backgrounds
-        - Try different angles and varieties
-        
-        ### 🍎 Supported Fruits:
-        """)
-        
-        for i, fruit in enumerate(fruit_names, 1):
-            st.markdown(f"{i}. **{fruit}**")
+    st.markdown("### 🍎 Supported Fruits:")
+    for i, fruit in enumerate(fruit_names, 1):
+        st.markdown(f"{i}. **{fruit}**")
 
 # --------------------------
 # Tab 3: Analytics
@@ -795,10 +753,9 @@ def main():
         - ~8.5M parameters
         """)
     
-    # Create tabs (including Assignment tab)
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # Create tabs (Upload tab removed)
+    tab1, tab2, tab3 = st.tabs([
         "🖼️ Demo",
-        "📤 Upload & Predict",
         "📊 Analytics",
         "📚 README"
     ])
@@ -807,12 +764,9 @@ def main():
         demo_tab(model, model_metadata, dataset_info)
 
     with tab2:
-        upload_tab(model, model_metadata)
-
-    with tab3:
         analytics_tab(model, model_metadata, dataset_info)
 
-    with tab4:
+    with tab3:
         readme_tab()
     
     # Footer
