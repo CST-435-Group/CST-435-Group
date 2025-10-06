@@ -107,8 +107,41 @@ def load_model():
 def load_dataset_info():
     """Load dataset information"""
     try:
-        with open('data/dataset_metadata.json', 'r') as f:
-            return json.load(f)
+        data_path = Path('data') / 'dataset_metadata.json'
+        j = json.loads(data_path.read_text())
+
+        # Normalize image paths to be OS-native and absolute where possible
+        norm_paths = []
+        img_root = Path.cwd()
+        for p in j.get('image_paths', []):
+            # replace Windows backslashes and strip surrounding whitespace
+            p_str = str(p).replace('\\', '/').strip()
+
+            candidate = Path(p_str)
+            # If relative, try project root
+            if not candidate.is_absolute():
+                candidate = img_root / p_str
+
+            # If not found, try searching by filename under preprocessed_images/
+            if not candidate.exists():
+                fname = Path(p_str).name
+                found = None
+                search_root = img_root / 'preprocessed_images'
+                if search_root.exists():
+                    # try to find first matching filename
+                    for f in search_root.rglob(fname):
+                        found = f
+                        break
+                if found:
+                    candidate = found
+
+            # Final fallback: keep original string (will raise later if missing)
+            norm_paths.append(str(candidate))
+
+        # Replace with normalized paths
+        j['image_paths'] = norm_paths
+
+        return j
     except Exception as e:
         st.error(f"Error loading dataset: {e}")
         return None
@@ -258,7 +291,7 @@ def demo_tab(model, model_metadata, dataset_info):
             # Display in column
             with cols[col_idx]:
                 # Show image
-                st.image(img, use_container_width=True)
+                st.image(img)
                 
                 # Show prediction with color coding
                 if is_correct:
@@ -314,7 +347,7 @@ def demo_tab(model, model_metadata, dataset_info):
         })
     
     results_df = pd.DataFrame(results_data)
-    st.dataframe(results_df, use_container_width=True)
+    st.dataframe(results_df)
 
 # --------------------------
 # Tab 2: Upload & Predict
@@ -356,13 +389,13 @@ def upload_tab(model, model_metadata):
                 # Display original image
                 with col1:
                     st.markdown("**Original Image**")
-                    st.image(original_img, use_container_width=True)
+                    st.image(original_img)
                     st.caption(f"Size: {original_img.size[0]}×{original_img.size[1]}")
                 
                 # Display processed image
                 with col2:
                     st.markdown("**Processed (128×128 Grayscale)**")
-                    st.image(processed_img, use_container_width=True)
+                    st.image(processed_img)
                     st.caption("Ready for model input")
                 
                 # Display prediction
@@ -457,7 +490,7 @@ def analytics_tab(model, model_metadata, dataset_info):
         st.info(f"📊 Click the button below to analyze all {len(image_paths)} images")
         st.warning("⏱️ This may take a few minutes depending on dataset size")
         
-        if st.button("🔍 Run Full Analysis", type="primary", use_container_width=True):
+    if st.button("🔍 Run Full Analysis", type="primary"):
             with st.spinner("Analyzing all images... Please wait..."):
                 predictions, true_labels, confidences, misclassified = analyze_all_images(
                     model, image_paths, labels, fruit_names
@@ -482,162 +515,208 @@ def analytics_tab(model, model_metadata, dataset_info):
                 st.rerun()
         
         
-        predictions = st.session_state.predictions
-        true_labels = st.session_state.true_labels
-        confidences = st.session_state.confidences
-        misclassified = st.session_state.misclassified
-        
-        # Overall metrics
-        st.markdown("---")
-        st.subheader("🎯 Overall Performance")
-        
+    # Safely retrieve analytics results from session_state (may be missing)
+    predictions = st.session_state.get('predictions', [])
+    true_labels = st.session_state.get('true_labels', [])
+    confidences = st.session_state.get('confidences', [])
+    misclassified = st.session_state.get('misclassified', [])
+
+    # Overall metrics
+    st.markdown("---")
+    st.subheader("🎯 Overall Performance")
+
+    # Handle empty analytics gracefully
+    if len(true_labels) > 0 and len(predictions) == len(true_labels):
         overall_acc = accuracy_score(true_labels, predictions)
-        avg_confidence = np.mean(confidences)
         correct_count = sum(1 for t, p in zip(true_labels, predictions) if t == p)
         incorrect_count = len(true_labels) - correct_count
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Overall Accuracy", f"{overall_acc*100:.2f}%")
-        with col2:
-            st.metric("Avg Confidence", f"{avg_confidence*100:.2f}%")
-        with col3:
-            st.metric("Correct", correct_count)
-        with col4:
-            st.metric("Incorrect", incorrect_count)
-        
+    else:
+        overall_acc = 0.0
+        correct_count = 0
+        incorrect_count = 0
+
+    avg_confidence = float(np.mean(confidences)) if len(confidences) > 0 else 0.0
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Overall Accuracy", f"{overall_acc*100:.2f}%")
+    with col2:
+        st.metric("Avg Confidence", f"{avg_confidence*100:.2f}%")
+    with col3:
+        st.metric("Correct", correct_count)
+    with col4:
+        st.metric("Incorrect", incorrect_count)
+
+    # Confusion Matrix and Per-Class Metrics (only when we have results)
+    if len(true_labels) > 0 and len(predictions) == len(true_labels):
         # Confusion Matrix
         st.markdown("---")
         st.subheader("🔢 Confusion Matrix")
-        
-        cm = confusion_matrix(true_labels, predictions)
-        
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                    xticklabels=fruit_names, yticklabels=fruit_names,
-                    ax=ax, cbar_kws={'label': 'Count'})
-        ax.set_xlabel('Predicted Label')
-        ax.set_ylabel('True Label')
-        ax.set_title('Confusion Matrix')
-        plt.tight_layout()
-        st.pyplot(fig)
-        
+
+        try:
+            cm = confusion_matrix(true_labels, predictions)
+
+            # Ensure we have a non-empty array to plot
+            if cm is None or getattr(cm, 'size', 0) == 0:
+                st.info("Confusion matrix is empty — no labeled predictions to display.")
+            else:
+                fig, ax = plt.subplots(figsize=(10, 8))
+
+                # If the number of class names doesn't match matrix size, use inferred ticklabels
+                if cm.shape[0] == len(fruit_names):
+                    xt = yt = fruit_names
+                else:
+                    xt = yt = None
+
+                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                            xticklabels=xt, yticklabels=yt,
+                            ax=ax, cbar_kws={'label': 'Count'})
+                ax.set_xlabel('Predicted Label')
+                ax.set_ylabel('True Label')
+                ax.set_title('Confusion Matrix')
+                plt.tight_layout()
+                st.pyplot(fig)
+        except Exception as e:
+            st.error(f"Could not compute/plot confusion matrix: {e}")
+            import traceback
+            traceback.print_exc()
+
         # Per-Class Metrics
         st.markdown("---")
         st.subheader("📈 Per-Class Performance")
-        
-        report = classification_report(true_labels, predictions, 
-                                       target_names=fruit_names, 
-                                       output_dict=True)
-        
-        # Create DataFrame
-        per_class_data = []
-        for fruit in fruit_names:
-            per_class_data.append({
-                'Fruit': fruit,
-                'Precision': f"{report[fruit]['precision']*100:.2f}%",
-                'Recall': f"{report[fruit]['recall']*100:.2f}%",
-                'F1-Score': f"{report[fruit]['f1-score']*100:.2f}%",
-                'Support': int(report[fruit]['support'])
-            })
-        
-        per_class_df = pd.DataFrame(per_class_data)
-        st.dataframe(per_class_df, use_container_width=True)
-        
-        # Confidence Distribution
-        st.markdown("---")
-        st.subheader("📊 Confidence Distribution")
-        
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.hist(confidences, bins=50, edgecolor='black', alpha=0.7)
-        ax.set_xlabel('Confidence')
-        ax.set_ylabel('Frequency')
-        ax.set_title('Distribution of Prediction Confidences')
-        ax.axvline(avg_confidence, color='red', linestyle='--', 
-                   label=f'Mean: {avg_confidence:.3f}')
-        ax.legend()
-        plt.tight_layout()
-        st.pyplot(fig)
-        
-        # Training History (if available)
-        history = load_training_history()
-        if history:
-            st.markdown("---")
-            st.subheader("📉 Training History")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Loss curve
-                fig, ax = plt.subplots(figsize=(8, 5))
-                epochs = range(1, len(history['train_loss']) + 1)
-                ax.plot(epochs, history['train_loss'], 'b-', label='Training Loss')
-                ax.plot(epochs, history['val_loss'], 'r-', label='Validation Loss')
-                ax.set_xlabel('Epoch')
-                ax.set_ylabel('Loss')
-                ax.set_title('Training and Validation Loss')
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                plt.tight_layout()
-                st.pyplot(fig)
-            
-            with col2:
-                # Accuracy curve
-                fig, ax = plt.subplots(figsize=(8, 5))
-                ax.plot(epochs, [acc*100 for acc in history['train_acc']], 
-                       'b-', label='Training Accuracy')
-                ax.plot(epochs, [acc*100 for acc in history['val_acc']], 
-                       'r-', label='Validation Accuracy')
-                ax.set_xlabel('Epoch')
-                ax.set_ylabel('Accuracy (%)')
-                ax.set_title('Training and Validation Accuracy')
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                plt.tight_layout()
-                st.pyplot(fig)
-        
-        # Misclassification Analysis
-        st.markdown("---")
-        st.subheader("❌ Misclassification Analysis")
-        
-        st.metric("Total Misclassified", len(misclassified))
-        
-        if len(misclassified) > 0:
-            # Show worst misclassifications (highest confidence but wrong)
-            st.markdown("#### Top 10 Most Confident Mistakes")
-            
-            sorted_mistakes = sorted(misclassified, 
-                                    key=lambda x: x['confidence'], 
-                                    reverse=True)[:10]
-            
-            mistake_data = []
-            for mistake in sorted_mistakes:
-                mistake_data.append({
-                    'Image': Path(mistake['image_path']).name,
-                    'True Label': mistake['true_label'],
-                    'Predicted': mistake['predicted'],
-                    'Confidence': f"{mistake['confidence']*100:.1f}%"
+
+        try:
+            report = classification_report(true_labels, predictions, 
+                                           target_names=fruit_names, 
+                                           output_dict=True)
+
+            # Create DataFrame
+            per_class_data = []
+            for fruit in fruit_names:
+                # Be defensive: some reports may not include every class when empty
+                if fruit in report:
+                    precision = report[fruit].get('precision', 0.0)
+                    recall = report[fruit].get('recall', 0.0)
+                    f1 = report[fruit].get('f1-score', 0.0)
+                    support = int(report[fruit].get('support', 0))
+                else:
+                    precision = recall = f1 = 0.0
+                    support = 0
+
+                per_class_data.append({
+                    'Fruit': fruit,
+                    'Precision': f"{precision*100:.2f}%",
+                    'Recall': f"{recall*100:.2f}%",
+                    'F1-Score': f"{f1*100:.2f}%",
+                    'Support': support
                 })
-            
-            mistake_df = pd.DataFrame(mistake_data)
-            st.dataframe(mistake_df, use_container_width=True)
-            
-            # Show sample misclassifications
-            st.markdown("#### Sample Misclassified Images")
-            
-            num_samples = min(10, len(sorted_mistakes))
-            cols = st.columns(5)
-            
-            for i in range(num_samples):
-                col_idx = i % 5
-                mistake = sorted_mistakes[i]
-                
-                with cols[col_idx]:
-                    img = Image.open(mistake['image_path']).convert('L')
-                    st.image(img, use_container_width=True)
-                    st.caption(f"True: {mistake['true_label']}")
-                    st.caption(f"Pred: {mistake['predicted']}")
-                    st.caption(f"Conf: {mistake['confidence']*100:.1f}%")
+
+            per_class_df = pd.DataFrame(per_class_data)
+            st.dataframe(per_class_df)
+        except Exception as e:
+            st.error(f"Could not compute classification report: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # Confidence Distribution (only plot if we have confidences)
+        if len(confidences) > 0:
+            st.markdown("---")
+            st.subheader("📊 Confidence Distribution")
+
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.hist(confidences, bins=50, edgecolor='black', alpha=0.7)
+            ax.set_xlabel('Confidence')
+            ax.set_ylabel('Frequency')
+            ax.set_title('Distribution of Prediction Confidences')
+            ax.axvline(avg_confidence, color='red', linestyle='--', 
+                       label=f'Mean: {avg_confidence:.3f}')
+            ax.legend()
+            plt.tight_layout()
+            st.pyplot(fig)
+        else:
+            st.info("No confidence scores available yet. Run the analysis to generate confidence distribution.")
+    else:
+        st.info("No analytics results to display yet. Click 'Run Full Analysis' to compute confusion matrix and per-class metrics.")
+
+    # Training History (if available)
+    history = load_training_history()
+    if history:
+        st.markdown("---")
+        st.subheader("📉 Training History")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Loss curve
+            fig, ax = plt.subplots(figsize=(8, 5))
+            epochs = range(1, len(history['train_loss']) + 1)
+            ax.plot(epochs, history['train_loss'], 'b-', label='Training Loss')
+            ax.plot(epochs, history['val_loss'], 'r-', label='Validation Loss')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel('Loss')
+            ax.set_title('Training and Validation Loss')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            st.pyplot(fig)
+
+        with col2:
+            # Accuracy curve
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.plot(epochs, [acc*100 for acc in history['train_acc']], 
+                   'b-', label='Training Accuracy')
+            ax.plot(epochs, [acc*100 for acc in history['val_acc']], 
+                   'r-', label='Validation Accuracy')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel('Accuracy (%)')
+            ax.set_title('Training and Validation Accuracy')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            st.pyplot(fig)
+
+    # Misclassification Analysis
+    st.markdown("---")
+    st.subheader("❌ Misclassification Analysis")
+
+    st.metric("Total Misclassified", len(misclassified))
+
+    if len(misclassified) > 0:
+        # Show worst misclassifications (highest confidence but wrong)
+        st.markdown("#### Top 10 Most Confident Mistakes")
+
+        sorted_mistakes = sorted(misclassified, 
+                                key=lambda x: x['confidence'], 
+                                reverse=True)[:10]
+
+        mistake_data = []
+        for mistake in sorted_mistakes:
+            mistake_data.append({
+                'Image': Path(mistake['image_path']).name,
+                'True Label': mistake['true_label'],
+                'Predicted': mistake['predicted'],
+                'Confidence': f"{mistake['confidence']*100:.1f}%"
+            })
+
+        mistake_df = pd.DataFrame(mistake_data)
+        st.dataframe(mistake_df)
+
+        # Show sample misclassifications
+        st.markdown("#### Sample Misclassified Images")
+
+        num_samples = min(10, len(sorted_mistakes))
+        cols = st.columns(5)
+
+        for i in range(num_samples):
+            col_idx = i % 5
+            mistake = sorted_mistakes[i]
+
+            with cols[col_idx]:
+                img = Image.open(mistake['image_path']).convert('L')
+                st.image(img)
+                st.caption(f"True: {mistake['true_label']}")
+                st.caption(f"Pred: {mistake['predicted']}")
+                st.caption(f"Conf: {mistake['confidence']*100:.1f}%")
 
 # --------------------------
 # Tab 4: README
@@ -654,6 +733,10 @@ def readme_tab():
         st.error("README.md not found in the project directory")
         st.info("Please ensure README.md exists in the same directory as this script")
 
+
+# assignment_tab removed as requested by user
+
+
 # --------------------------
 # Main App with Sidebar
 # --------------------------
@@ -664,6 +747,18 @@ def main():
     
     if dataset_info is None:
         st.stop()
+
+    # Initialize analytics session state keys with safe defaults so UI doesn't crash
+    if 'predictions' not in st.session_state:
+        st.session_state['predictions'] = []
+    if 'true_labels' not in st.session_state:
+        st.session_state['true_labels'] = []
+    if 'confidences' not in st.session_state:
+        st.session_state['confidences'] = []
+    if 'misclassified' not in st.session_state:
+        st.session_state['misclassified'] = []
+    if 'analytics_complete' not in st.session_state:
+        st.session_state['analytics_complete'] = False
     
     fruit_names = model_metadata['fruit_names']
     
@@ -700,18 +795,23 @@ def main():
         - ~8.5M parameters
         """)
     
-    # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["🖼️ Demo", "📤 Upload & Predict", "📊 Analytics", "📖 README"])
-    
+    # Create tabs (including Assignment tab)
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🖼️ Demo",
+        "📤 Upload & Predict",
+        "📊 Analytics",
+        "📚 README"
+    ])
+
     with tab1:
         demo_tab(model, model_metadata, dataset_info)
-    
+
     with tab2:
         upload_tab(model, model_metadata)
-    
+
     with tab3:
         analytics_tab(model, model_metadata, dataset_info)
-    
+
     with tab4:
         readme_tab()
     
