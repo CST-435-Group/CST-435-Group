@@ -686,9 +686,6 @@ def readme_tab():
     try:
         readme_path = Path(__file__).parent / 'README.md'
         with open(readme_path, 'r', encoding='utf-8') as f:
-        readme_content = f.read()
-        with open(readme_path, 'r', encoding='utf-8') as f:
-        with open(readme_path, 'r', encoding='utf-8') as f:
             readme_content = f.read()
         st.markdown(readme_content)
     except FileNotFoundError:
