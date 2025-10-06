@@ -174,7 +174,7 @@ def load_dataset_info():
 
         # Normalize image paths to be OS-native and absolute where possible
         norm_paths = []
-        img_root = Path.cwd()
+        img_root = Path(__file__).parent
         for p in j.get('image_paths', []):
             # replace Windows backslashes and strip surrounding whitespace
             p_str = str(p).replace('\\', '/').strip()
