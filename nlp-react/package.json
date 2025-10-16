@@ -1,0 +1,29 @@
+{
+  "name": "sentiment-analyzer-fullstack",
+  "version": "1.0.0",
+  "description": "Multi-scale sentiment analyzer with React and FastAPI",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && python main.py",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:frontend": "cd frontend && npm run build",
+    "vercel-build": "cd frontend && npm install && npm run build"
+  },
+  "keywords": [
+    "sentiment-analysis",
+    "nlp",
+    "react",
+    "fastapi",
+    "transformers"
+  ],
+  "author": "AIT-204 Course",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
