@@ -8,24 +8,24 @@ function InputSection({ setResult, setLoading, loading, apiStatus }) {
 
   const handleAnalyze = async () => {
     if (!text.trim()) {
-      setError('Please enter some text to analyze');
+      setError('Please enter a review to analyze');
       return;
     }
 
     if (apiStatus !== 'connected') {
-      setError('API is not connected. Please check the backend server.');
+      setError('API is not connected. Please check your backend server.');
       return;
     }
 
-    setError('');
+    setError(null);
     setLoading(true);
-    setResult(null);
 
     try {
       const result = await analyzeSentiment(text);
       setResult(result);
     } catch (err) {
       setError(err.message || 'Failed to analyze sentiment');
+      console.error('Analysis error:', err);
     } finally {
       setLoading(false);
     }
@@ -50,7 +50,7 @@ function InputSection({ setResult, setLoading, loading, apiStatus }) {
           setError('');
         }}
         onKeyPress={handleKeyPress}
-        placeholder="Type or paste a movie review here...&#10;&#10;Example: 'This movie was incredible! The acting was superb and the plot kept me engaged throughout.'"
+        placeholder="Enter a hospital or healthcare review... Example: The hospital staff was very professional and caring."
         className="w-full h-40 p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-gray-700"
         disabled={loading}
       />

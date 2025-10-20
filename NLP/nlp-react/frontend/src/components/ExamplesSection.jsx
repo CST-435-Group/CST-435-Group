@@ -1,15 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Loader2 } from 'lucide-react';
 import { getExamples, analyzeSentiment } from '../services/api';
 
 function ExamplesSection({ setResult, setLoading }) {
   const [examples, setExamples] = useState(null);
+  const [loadingExamples, setLoadingExamples] = useState(true);
 
   useEffect(() => {
-    getExamples()
-      .then(setExamples)
-      .catch(console.error);
+    loadExamples();
   }, []);
+
+  const loadExamples = async () => {
+    try {
+      const data = await getExamples();
+      setExamples(data);
+    } catch (error) {
+      console.error('Failed to load examples:', error);
+    } finally {
+      setLoadingExamples(false);
+    }
+  };
 
   const handleExampleClick = async (text) => {
     setLoading(true);
@@ -23,52 +33,89 @@ function ExamplesSection({ setResult, setLoading }) {
     }
   };
 
-  if (!examples) return null;
-
-  const exampleButtons = [
-    { score: '3', emoji: '🤩', color: 'from-green-500 to-green-600', hoverColor: 'hover:from-green-600 hover:to-green-700' },
-    { score: '2', emoji: '😊', color: 'from-lime-500 to-lime-600', hoverColor: 'hover:from-lime-600 hover:to-lime-700' },
-    { score: '0', emoji: '😶', color: 'from-yellow-500 to-yellow-600', hoverColor: 'hover:from-yellow-600 hover:to-yellow-700' },
-    { score: '-2', emoji: '😞', color: 'from-orange-500 to-orange-600', hoverColor: 'hover:from-orange-600 hover:to-orange-700' },
-    { score: '-3', emoji: '😢', color: 'from-red-500 to-red-600', hoverColor: 'hover:from-red-600 hover:to-red-700' },
-  ];
+  if (loadingExamples) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
       <div className="flex items-center gap-2 mb-4">
-        <Sparkles className="w-5 h-5 text-purple-600" />
-        <h3 className="text-xl font-bold text-gray-800">Try Examples</h3>
+        <Sparkles className="w-5 h-5 text-teal-600" />
+        <h2 className="text-xl font-bold text-gray-800">
+          Try Examples
+        </h2>
       </div>
 
       <p className="text-sm text-gray-600 mb-4">
-        Click to analyze pre-written reviews
+        Click to analyze hospital review examples
       </p>
 
       <div className="space-y-3">
-        {exampleButtons.map(({ score, emoji, color, hoverColor }) => {
-          const exampleText = examples[score]?.[0];
-          if (!exampleText) return null;
+        {/* Positive Examples */}
+        {examples?.positive && (
+          <div>
+            <h3 className="text-sm font-semibold text-green-600 mb-2 flex items-center gap-1">
+              😊 Positive
+            </h3>
+            <div className="space-y-2">
+              {examples.positive.map((example, index) => (
+                <button
+                  key={`pos-${index}`}
+                  onClick={() => handleExampleClick(example)}
+                  className="w-full text-left p-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg text-sm text-gray-700 transition-colors"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-          return (
-            <button
-              key={score}
-              onClick={() => handleExampleClick(exampleText)}
-              className={`w-full text-left p-4 bg-gradient-to-r ${color} ${hoverColor} text-white rounded-lg transition-all shadow-md hover:shadow-lg`}
-            >
-              <div className="flex items-start gap-3">
-                <span className="text-2xl flex-shrink-0">{emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold mb-1">
-                    Score: {score}/3
-                  </p>
-                  <p className="text-xs opacity-90 line-clamp-2">
-                    {exampleText}
-                  </p>
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        {/* Neutral Examples */}
+        {examples?.neutral && (
+          <div>
+            <h3 className="text-sm font-semibold text-yellow-600 mb-2 flex items-center gap-1">
+              😐 Neutral
+            </h3>
+            <div className="space-y-2">
+              {examples.neutral.map((example, index) => (
+                <button
+                  key={`neu-${index}`}
+                  onClick={() => handleExampleClick(example)}
+                  className="w-full text-left p-3 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded-lg text-sm text-gray-700 transition-colors"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Negative Examples */}
+        {examples?.negative && (
+          <div>
+            <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-1">
+              😞 Negative
+            </h3>
+            <div className="space-y-2">
+              {examples.negative.map((example, index) => (
+                <button
+                  key={`neg-${index}`}
+                  onClick={() => handleExampleClick(example)}
+                  className="w-full text-left p-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg text-sm text-gray-700 transition-colors"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

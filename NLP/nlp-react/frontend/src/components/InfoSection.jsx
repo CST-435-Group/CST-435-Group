@@ -1,57 +1,58 @@
-import { Info, Brain, Zap, Globe } from 'lucide-react';
+import { Info, Zap } from 'lucide-react';
 
 function InfoSection() {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
       <div className="flex items-center gap-2 mb-4">
-        <Info className="w-5 h-5 text-blue-600" />
-        <h3 className="text-xl font-bold text-gray-800">About</h3>
+        <Info className="w-5 h-5 text-teal-600" />
+        <h2 className="text-xl font-bold text-gray-800">Quick Info</h2>
       </div>
 
-      <div className="space-y-4">
-        <div className="flex items-start gap-3">
-          <Brain className="w-5 h-5 text-purple-600 flex-shrink-0 mt-1" />
-          <div>
-            <p className="font-semibold text-gray-800 text-sm">AI-Powered</p>
-            <p className="text-xs text-gray-600">
-              Uses DistilBERT transformer model for accurate sentiment analysis
-            </p>
+      <div className="space-y-4 text-sm">
+        <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="w-5 h-5 text-teal-600" />
+            <h3 className="font-semibold text-gray-800">Model Performance</h3>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Accuracy:</span>
+              <span className="font-bold text-teal-700">86.5%</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Algorithm:</span>
+              <span className="font-medium text-gray-700">Logistic Regression</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Features:</span>
+              <span className="font-medium text-gray-700">15,000 TF-IDF</span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-start gap-3">
-          <Zap className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-1" />
-          <div>
-            <p className="font-semibold text-gray-800 text-sm">7-Point Scale</p>
-            <p className="text-xs text-gray-600">
-              Captures nuanced sentiment from -3 (Very Negative) to +3 (Very Positive)
-            </p>
+        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+          <h3 className="font-semibold text-gray-800 mb-2">Categories</h3>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">😊</span>
+              <span className="text-xs text-gray-600">Ratings 4-5</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">😐</span>
+              <span className="text-xs text-gray-600">Rating 3</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">😞</span>
+              <span className="text-xs text-gray-600">Ratings 1-2</span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-start gap-3">
-          <Globe className="w-5 h-5 text-green-600 flex-shrink-0 mt-1" />
-          <div>
-            <p className="font-semibold text-gray-800 text-sm">Real-Time</p>
-            <p className="text-xs text-gray-600">
-              Instant analysis with confidence scores and probability distributions
-            </p>
-          </div>
+        <div className="pt-3 border-t border-gray-200">
+          <p className="text-xs text-gray-500 italic text-center">
+            Click "About NLP" tab for detailed explanation
+          </p>
         </div>
-      </div>
-
-      <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-        <p className="text-xs text-gray-700 leading-relaxed">
-          <strong>How it works:</strong> This app uses a fine-tuned language model to analyze
-          the sentiment of movie reviews. It goes beyond simple positive/negative classification
-          by providing a nuanced 7-point scale.
-        </p>
-      </div>
-
-      <div className="mt-4 p-4 bg-purple-50 rounded-lg">
-        <p className="text-xs text-gray-700">
-          <strong>Tech Stack:</strong> React, FastAPI, PyTorch, Transformers, Tailwind CSS
-        </p>
       </div>
     </div>
   );

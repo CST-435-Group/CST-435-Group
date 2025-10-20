@@ -1,56 +1,57 @@
-import { Film, Activity } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 function Header({ apiStatus }) {
   return (
-    <header className="text-center">
+    <div className="text-center">
       <div className="flex items-center justify-center gap-3 mb-4">
-        <Film className="w-12 h-12 text-blue-600" />
-        <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          Sentiment Analyzer
+        <Activity className="w-12 h-12 text-teal-600" />
+        <h1 className="text-5xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+          Hospital Review Analyzer
         </h1>
       </div>
-
-      <p className="text-xl text-gray-700 mb-4">
-        Analyze movie reviews on a 7-point sentiment scale
+      
+      <p className="text-xl text-gray-600 mb-4">
+        AI-Powered Patient Feedback Analysis using NLTK & Machine Learning
       </p>
 
+      {/* API Status Indicator */}
       <div className="flex items-center justify-center gap-2 text-sm">
-        <Activity className={`w-4 h-4 ${
-          apiStatus === 'connected' ? 'text-green-500' :
-          apiStatus === 'disconnected' ? 'text-red-500' :
-          'text-yellow-500'
-        }`} />
-        <span className={`${
-          apiStatus === 'connected' ? 'text-green-600' :
-          apiStatus === 'disconnected' ? 'text-red-600' :
-          'text-yellow-600'
-        }`}>
-          {apiStatus === 'connected' && 'AI Model Ready'}
-          {apiStatus === 'disconnected' && 'API Disconnected'}
-          {apiStatus === 'checking' && 'Connecting...'}
-        </span>
+        {apiStatus === 'checking' && (
+          <>
+            <Clock className="w-4 h-4 text-yellow-500 animate-spin" />
+            <span className="text-yellow-600">Checking API...</span>
+          </>
+        )}
+        {apiStatus === 'connected' && (
+          <>
+            <CheckCircle className="w-4 h-4 text-green-500" />
+            <span className="text-green-600">Model Ready</span>
+          </>
+        )}
+        {apiStatus === 'disconnected' && (
+          <>
+            <XCircle className="w-4 h-4 text-red-500" />
+            <span className="text-red-600">API Disconnected</span>
+          </>
+        )}
       </div>
 
-      <div className="mt-6 bg-white rounded-lg shadow-md p-4 max-w-3xl mx-auto">
-        <div className="grid grid-cols-7 gap-2 text-center text-xs">
-          {[
-            { score: '-3', emoji: '😢', label: 'Very Negative' },
-            { score: '-2', emoji: '😞', label: 'Negative' },
-            { score: '-1', emoji: '😐', label: 'Slightly Negative' },
-            { score: '0', emoji: '😶', label: 'Neutral' },
-            { score: '+1', emoji: '🙂', label: 'Slightly Positive' },
-            { score: '+2', emoji: '😊', label: 'Positive' },
-            { score: '+3', emoji: '🤩', label: 'Very Positive' },
-          ].map((item) => (
-            <div key={item.score} className="flex flex-col items-center">
-              <span className="text-2xl mb-1">{item.emoji}</span>
-              <span className="font-semibold text-gray-700">{item.score}</span>
-              <span className="text-gray-500 hidden sm:block">{item.label}</span>
-            </div>
-          ))}
+      {/* Remove the old 7-point scale, add simple 3-category display */}
+      <div className="mt-6 flex items-center justify-center gap-4">
+        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg border border-green-200">
+          <span className="text-2xl">😊</span>
+          <span className="text-sm font-medium text-green-700">Positive</span>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 rounded-lg border border-yellow-200">
+          <span className="text-2xl">😐</span>
+          <span className="text-sm font-medium text-yellow-700">Neutral</span>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 rounded-lg border border-red-200">
+          <span className="text-2xl">😞</span>
+          <span className="text-sm font-medium text-red-700">Negative</span>
         </div>
       </div>
-    </header>
+    </div>
   );
 }
 

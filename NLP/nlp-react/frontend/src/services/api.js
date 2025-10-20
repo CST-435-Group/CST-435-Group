@@ -1,5 +1,5 @@
 /**
- * API Service for Sentiment Analyzer
+ * API Service for Hospital Review Sentiment Analyzer
  * Handles all communication with the FastAPI backend
  */
 
@@ -58,8 +58,8 @@ export const checkHealth = async () => {
 };
 
 /**
- * Analyze sentiment of a single text
- * @param {string} text - Text to analyze
+ * Analyze sentiment of a single hospital review
+ * @param {string} text - Review text to analyze
  * @returns {Promise<Object>} Sentiment analysis result
  */
 export const analyzeSentiment = async (text) => {
@@ -75,8 +75,8 @@ export const analyzeSentiment = async (text) => {
 };
 
 /**
- * Analyze sentiment of multiple texts in batch
- * @param {string[]} texts - Array of texts to analyze
+ * Analyze sentiment of multiple reviews in batch
+ * @param {string[]} texts - Array of review texts to analyze
  * @returns {Promise<Array>} Array of sentiment analysis results
  */
 export const analyzeBatch = async (texts) => {
@@ -92,8 +92,8 @@ export const analyzeBatch = async (texts) => {
 };
 
 /**
- * Get example reviews
- * @returns {Promise<Object>} Example reviews for each sentiment level
+ * Get example reviews for each sentiment category
+ * @returns {Promise<Object>} Example reviews
  */
 export const getExamples = async () => {
   try {
@@ -105,15 +105,58 @@ export const getExamples = async () => {
 };
 
 /**
- * Get sentiment scale information
- * @returns {Promise<Object>} Sentiment scale with labels and emojis
+ * Get model information
+ * @returns {Promise<Object>} Model info
  */
-export const getSentimentScale = async () => {
+export const getModelInfo = async () => {
   try {
-    const response = await api.get('/sentiment-scale');
+    const response = await api.get('/model/info');
     return response.data;
   } catch (error) {
-    throw new Error('Failed to load sentiment scale');
+    throw new Error('Failed to load model info');
+  }
+};
+
+/**
+ * Get dataset statistics
+ * @returns {Promise<Object>} Dataset statistics
+ */
+export const getStatistics = async () => {
+  try {
+    const response = await api.get('/statistics');
+    return response.data;
+  } catch (error) {
+    throw new Error('Failed to load statistics');
+  }
+};
+
+/**
+ * Get training status
+ * @returns {Promise<Object>} Training status
+ */
+export const getTrainingStatus = async () => {
+  try {
+    const response = await api.get('/train/status');
+    return response.data;
+  } catch (error) {
+    throw new Error('Failed to get training status');
+  }
+};
+
+/**
+ * Start model training
+ * @param {Object} config - Training configuration
+ * @returns {Promise<Object>} Training start response
+ */
+export const startTraining = async (config) => {
+  try {
+    const response = await api.post('/train/start', config);
+    return response.data;
+  } catch (error) {
+    if (error.response?.data?.detail) {
+      throw new Error(error.response.data.detail);
+    }
+    throw new Error('Failed to start training');
   }
 };
 
