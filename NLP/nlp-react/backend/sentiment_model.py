@@ -1,6 +1,6 @@
 """
-Sentiment Analysis Model
-Includes: Better preprocessing, advanced feature engineering, model optimization
+Optimized Sentiment Analysis Model for Maximum Accuracy
+Handles data preprocessing, model training, and predictions
 """
 
 import numpy as np
@@ -19,10 +19,10 @@ import string
 import warnings
 warnings.filterwarnings('ignore')
 
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import LinearSVC
 from sklearn.metrics import (
     accuracy_score, 
@@ -38,7 +38,7 @@ plt.rcParams['figure.figsize'] = (12, 6)
 
 
 class SentimentAnalyzer:
-    """Optimized sentiment analyzer with advanced techniques"""
+    """Optimized sentiment analyzer for hospital reviews"""
     
     def __init__(self, data_path='../data/hospital.csv'):
         self.data_path = data_path
@@ -54,11 +54,12 @@ class SentimentAnalyzer:
         self.lemmatizer = WordNetLemmatizer()
         self.stop_words = set(stopwords.words('english'))
         
-        # Remove sentiment-bearing words from stopwords
+        # Keep important sentiment words
         self.stop_words = self.stop_words - {
             'not', 'no', 'nor', 'neither', 'never', 'none',
             'good', 'bad', 'best', 'worst', 'great', 'terrible',
-            'very', 'too', 'more', 'most', 'less', 'least'
+            'very', 'too', 'more', 'most', 'less', 'least',
+            'really', 'quite', 'rather', 'somewhat'
         }
     
     @staticmethod
@@ -92,7 +93,9 @@ class SentimentAnalyzer:
         # Handle missing values
         initial_count = len(self.df)
         self.df = self.df.dropna(subset=[self.text_column, self.rating_column])
-        print(f"Removed {initial_count - len(self.df)} rows with missing values")
+        removed = initial_count - len(self.df)
+        if removed > 0:
+            print(f"Removed {removed} rows with missing values")
         
         # Create sentiment labels
         self.df['sentiment'] = self.df[self.rating_column].apply(self._rating_to_sentiment)
@@ -100,12 +103,14 @@ class SentimentAnalyzer:
         sentiment_counts = self.df['sentiment'].value_counts()
         print(f"\nSentiment Distribution:")
         for sentiment, count in sentiment_counts.items():
-            print(f"  {sentiment}: {count}")
+            pct = (count / len(self.df)) * 100
+            print(f"  {sentiment}: {count} ({pct:.1f}%)")
         
         return self.df
     
     @staticmethod
     def _rating_to_sentiment(rating):
+        """Convert rating to sentiment - more balanced thresholds"""
         if rating <= 2:
             return 'negative'
         elif rating == 3:
@@ -114,7 +119,7 @@ class SentimentAnalyzer:
             return 'positive'
     
     def clean_text(self, text):
-        """Advanced text cleaning"""
+        """Advanced text cleaning that preserves sentiment"""
         text = str(text).lower()
         
         # Remove HTML
@@ -124,17 +129,17 @@ class SentimentAnalyzer:
         text = re.sub(r'http\S+|www\S+|https\S+', '', text)
         text = re.sub(r'\S+@\S+', '', text)
         
-        # Handle negations (critical for sentiment)
+        # Handle negations (CRITICAL for sentiment)
         text = re.sub(r"n't", " not", text)
         text = re.sub(r"won't", "will not", text)
         text = re.sub(r"can't", "cannot", text)
         
-        # Remove punctuation but keep important sentiment markers
-        text = text.translate(str.maketrans('', '', string.punctuation.replace('!', '').replace('?', '')))
+        # Keep exclamation/question marks as features
+        text = re.sub(r'!+', ' EXCLAMATION ', text)
+        text = re.sub(r'\?+', ' QUESTION ', text)
         
-        # Replace multiple exclamation/question marks
-        text = re.sub(r'!+', ' exclamation ', text)
-        text = re.sub(r'\?+', ' question ', text)
+        # Remove punctuation (except spaces)
+        text = re.sub(r'[^\w\s]', ' ', text)
         
         # Remove extra whitespace
         text = re.sub(r'\s+', ' ', text).strip()
@@ -142,24 +147,30 @@ class SentimentAnalyzer:
         # Tokenize
         tokens = word_tokenize(text)
         
-        # Remove stopwords and lemmatize (but keep sentiment words)
+        # Lemmatize but keep important words
         tokens = [
             self.lemmatizer.lemmatize(word) 
             for word in tokens 
-            if word not in self.stop_words and len(word) > 2
+            if (word not in self.stop_words or word in ['not', 'no', 'never']) and len(word) > 1
         ]
         
         return ' '.join(tokens)
     
     def build_model(self, test_size=0.2, random_state=42):
-        """Build optimized model with best parameters"""
+        """Build optimized model"""
         print("\n" + "="*80)
-        print("BUILDING OPTIMIZED MODEL")
+        print("BUILDING MODEL")
         print("="*80)
         
         # Clean text
         print("\n--- Cleaning Text ---")
         self.df['cleaned_text'] = self.df[self.text_column].apply(self.clean_text)
+        
+        # Show example
+        if len(self.df) > 0:
+            print(f"\nExample cleaning:")
+            print(f"Original: {self.df[self.text_column].iloc[0][:100]}")
+            print(f"Cleaned:  {self.df['cleaned_text'].iloc[0][:100]}")
         
         # Prepare data
         X = self.df['cleaned_text']
@@ -169,29 +180,28 @@ class SentimentAnalyzer:
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
             X, y, test_size=test_size, random_state=random_state, stratify=y
         )
-        print(f"Training: {len(self.X_train)} | Testing: {len(self.X_test)}")
+        print(f"\nTrain: {len(self.X_train)} | Test: {len(self.X_test)}")
         
-        # Advanced TF-IDF with optimal parameters
-        print("\n--- Advanced TF-IDF Vectorization ---")
+        # Optimized TF-IDF
+        print("\n--- TF-IDF Vectorization ---")
         self.vectorizer = TfidfVectorizer(
-            max_features=15000,        # More features
-            ngram_range=(1, 3),        # Unigrams, bigrams, trigrams
-            min_df=2,                  # Ignore very rare terms
-            max_df=0.85,               # Ignore very common terms
-            sublinear_tf=True,         # Apply sublinear scaling
-            use_idf=True,              # Use inverse document frequency
-            smooth_idf=True,           # Smooth IDF weights
-            norm='l2'                  # L2 normalization
+            max_features=15000,
+            ngram_range=(1, 3),
+            min_df=2,
+            max_df=0.85,
+            sublinear_tf=True,
+            use_idf=True,
+            smooth_idf=True,
+            norm='l2'
         )
         
         X_train_tfidf = self.vectorizer.fit_transform(self.X_train)
         X_test_tfidf = self.vectorizer.transform(self.X_test)
         
-        print(f"Feature matrix: {X_train_tfidf.shape}")
-        print(f"Vocabulary size: {len(self.vectorizer.vocabulary_)}")
+        print(f"Features: {X_train_tfidf.shape[1]}")
         
-        # Try multiple models and pick the best
-        print("\n--- Testing Multiple Models ---")
+        # Test multiple models
+        print("\n--- Testing Models ---")
         
         models = {
             'Logistic Regression': LogisticRegression(
@@ -212,7 +222,6 @@ class SentimentAnalyzer:
                 n_estimators=300,
                 max_depth=50,
                 min_samples_split=2,
-                min_samples_leaf=1,
                 class_weight='balanced',
                 random_state=random_state,
                 n_jobs=-1
@@ -224,7 +233,7 @@ class SentimentAnalyzer:
         best_name = ""
         
         for name, model in models.items():
-            print(f"\nTraining {name}...")
+            print(f"\n{name}...")
             model.fit(X_train_tfidf, self.y_train)
             
             train_score = model.score(X_train_tfidf, self.y_train)
@@ -241,7 +250,6 @@ class SentimentAnalyzer:
         
         print("\n" + "="*80)
         print(f"🏆 BEST MODEL: {best_name}")
-        print(f"   Training Accuracy: {self.model.score(X_train_tfidf, self.y_train):.4f}")
         print(f"   Testing Accuracy: {best_score:.4f} ({best_score*100:.2f}%)")
         print("="*80)
         
@@ -250,57 +258,59 @@ class SentimentAnalyzer:
     def evaluate_model(self):
         """Evaluate model performance"""
         print("\n" + "="*80)
-        print("MODEL EVALUATION")
+        print("EVALUATION")
         print("="*80)
         
         X_test_tfidf = self.vectorizer.transform(self.X_test)
         y_pred = self.model.predict(X_test_tfidf)
         
-        print("\n--- Classification Report ---")
-        print(classification_report(self.y_test, y_pred, zero_division=0))
+        print("\n" + classification_report(self.y_test, y_pred, zero_division=0))
         
         # Confusion matrix
         cm = confusion_matrix(self.y_test, y_pred, labels=['negative', 'neutral', 'positive'])
-        self._plot_confusion_matrix(cm, ['negative', 'neutral', 'positive'])
+        print("\nConfusion Matrix:")
+        print(cm)
         
         return cm
     
-    def _plot_confusion_matrix(self, cm, labels):
-        """Plot confusion matrix"""
-        fig = plt.figure(figsize=(10, 8))
-        sns.heatmap(
-            cm, 
-            annot=True, 
-            fmt='d', 
-            cmap='Blues', 
-            xticklabels=labels,
-            yticklabels=labels,
-            cbar_kws={'label': 'Count'}
-        )
-        plt.title('Confusion Matrix - Sentiment Classification', fontsize=16, fontweight='bold')
-        plt.ylabel('Actual Sentiment', fontsize=12)
-        plt.xlabel('Predicted Sentiment', fontsize=12)
-        plt.tight_layout()
-        # plt.savefig('confusion_matrix.png', dpi=300, bbox_inches='tight')
-        print("\n✅ Generated confusion matrix")
-        plt.close()
+    def make_predictions(self, custom_texts=None):
+        """Test predictions"""
+        if custom_texts is None:
+            custom_texts = [
+                "The hospital staff was amazing and very caring. Best experience ever!",
+                "Terrible service. Long wait times and rude staff. Very disappointed.",
+                "It was okay. Nothing special but not terrible either.",
+                "The doctor was professional and the facility was clean.",
+                "Worst hospital ever! I will never come back here again!",
+                "Average experience. Could be better but could be worse."
+            ]
+        
+        print("\n" + "="*80)
+        print("TESTING PREDICTIONS")
+        print("="*80)
+        
+        for text in custom_texts:
+            result = self.predict_single(text)
+            print(f"\nText: {text}")
+            print(f"→ {result['sentiment'].upper()} ({result['confidence']:.1%})")
     
     def predict_single(self, text):
-        """Predict sentiment for a single text"""
+        """Predict sentiment for single text"""
         if self.model is None or self.vectorizer is None:
-            raise ValueError("Model not trained. Call build_model() first.")
+            raise ValueError("Model not trained")
         
         cleaned = self.clean_text(text)
         vectorized = self.vectorizer.transform([cleaned])
         
         prediction = self.model.predict(vectorized)[0]
-        probabilities = self.model.predict_proba(vectorized)[0] if hasattr(self.model, 'predict_proba') else None
         
-        if probabilities is not None:
+        # Handle models with/without predict_proba
+        if hasattr(self.model, 'predict_proba'):
+            probabilities = self.model.predict_proba(vectorized)[0]
             prob_dict = dict(zip(self.model.classes_, probabilities))
-            confidence = max(probabilities)
+            confidence = float(max(probabilities))
         else:
-            # For LinearSVC which doesn't have predict_proba
+            # LinearSVC doesn't have predict_proba
             prob_dict = {prediction: 1.0}
             confidence = 1.0
         
@@ -312,37 +322,24 @@ class SentimentAnalyzer:
         }
     
     def save_model(self, model_dir='./saved_model'):
-        """Save trained model and vectorizer"""
+        """Save model"""
         os.makedirs(model_dir, exist_ok=True)
         
-        model_path = os.path.join(model_dir, 'sentiment_model.pkl')
-        with open(model_path, 'wb') as f:
+        with open(os.path.join(model_dir, 'sentiment_model.pkl'), 'wb') as f:
             pickle.dump(self.model, f)
-        print(f"✅ Model saved: {model_path}")
+        print(f"✅ Model saved: {model_dir}/sentiment_model.pkl")
         
-        vectorizer_path = os.path.join(model_dir, 'vectorizer.pkl')
-        with open(vectorizer_path, 'wb') as f:
+        with open(os.path.join(model_dir, 'vectorizer.pkl'), 'wb') as f:
             pickle.dump(self.vectorizer, f)
-        print(f"✅ Vectorizer saved: {vectorizer_path}")
+        print(f"✅ Vectorizer saved: {model_dir}/vectorizer.pkl")
     
     def load_model(self, model_dir='./saved_model'):
-        """Load trained model and vectorizer"""
-        model_path = os.path.join(model_dir, 'sentiment_model.pkl')
-        with open(model_path, 'rb') as f:
+        """Load model"""
+        with open(os.path.join(model_dir, 'sentiment_model.pkl'), 'rb') as f:
             self.model = pickle.load(f)
-        print(f"✅ Model loaded: {model_path}")
+        print(f"✅ Model loaded: {model_dir}/sentiment_model.pkl")
         
-        vectorizer_path = os.path.join(model_dir, 'vectorizer.pkl')
-        with open(vectorizer_path, 'rb') as f:
+        with open(os.path.join(model_dir, 'vectorizer.pkl'), 'rb') as f:
             self.vectorizer = pickle.load(f)
-        print(f"✅ Vectorizer loaded: {vectorizer_path}")
-
-
-# Example usage
-if __name__ == "__main__":
-    analyzer = SentimentAnalyzer(data_path='../data/hospital.csv')
-    analyzer.load_data(text_column='Feedback', rating_column='Rating')
-    analyzer.preprocess_and_visualize()
-    analyzer.build_model()
-    analyzer.evaluate_model()
-    analyzer.save_model()
+        print(f"✅ Vectorizer loaded: {model_dir}/vectorizer.pkl")
+        
