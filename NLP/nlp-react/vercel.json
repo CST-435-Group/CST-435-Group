@@ -1,16 +1,8 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "zeroConfig": true,
-        "buildCommand": "cd frontend && rm -rf node_modules && npm install --no-optional && npm run build",
-        "outputDirectory": "frontend/dist"
-      }
-    }
-  ],
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "npm install",
   "routes": [
     {
       "src": "/(.*)",
