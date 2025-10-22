@@ -5,13 +5,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    target: ['es2015', 'edge88', 'firefox78', 'chrome87', 'safari13'],
     outDir: 'dist',
-    minify: 'terser',
-    rollupOptions: {
-      output: {
-        manualChunks: undefined
-      }
+    commonjsOptions: {
+      include: [],
+      transformMixedEsModules: true
     }
   },
   server: {
