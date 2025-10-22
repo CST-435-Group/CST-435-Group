@@ -13,5 +13,15 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
+  },
+  build: {
+    target: 'esnext',
+    outDir: 'dist',
+    rollupOptions: {
+      external: ['@rollup/rollup-linux-x64-gnu']
+    }
+  },
+  optimizeDeps: {
+    exclude: ['@rollup/rollup-linux-x64-gnu']
   }
 })
