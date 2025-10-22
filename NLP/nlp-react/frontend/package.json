@@ -14,8 +14,8 @@
     "axios": "^1.6.5",
     "build": "^0.1.4",
     "lucide-react": "^0.309.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "recharts": "^2.15.4"
   },
   "devDependencies": {
