@@ -7,9 +7,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     commonjsOptions: {
-      include: [],
+      include: [/node_modules/],
       transformMixedEsModules: true
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
     }
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react/jsx-runtime']
   },
   server: {
     port: 3000,
