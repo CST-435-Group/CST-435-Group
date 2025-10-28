@@ -13,7 +13,14 @@ function ExamplesSection({ setResult, setLoading }) {
   const loadExamples = async () => {
     try {
       const data = await getExamples();
-      setExamples(data);
+      // Transform backend format {"-3": [...], "0": [...], "3": [...]}
+      // to frontend format {negative: [...], neutral: [...], positive: [...]}
+      const transformed = {
+        positive: [...(data["2"] || []), ...(data["3"] || [])],
+        neutral: [...(data["-1"] || []), ...(data["0"] || []), ...(data["1"] || [])],
+        negative: [...(data["-3"] || []), ...(data["-2"] || [])]
+      };
+      setExamples(transformed);
     } catch (error) {
       console.error('Failed to load examples:', error);
     } finally {
@@ -58,7 +65,7 @@ function ExamplesSection({ setResult, setLoading }) {
 
       <div className="space-y-3">
         {/* Positive Examples */}
-        {examples?.positive && (
+        {examples?.positive && examples.positive.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-green-600 mb-2 flex items-center gap-1">
               😊 Positive
@@ -78,7 +85,7 @@ function ExamplesSection({ setResult, setLoading }) {
         )}
 
         {/* Neutral Examples */}
-        {examples?.neutral && (
+        {examples?.neutral && examples.neutral.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-yellow-600 mb-2 flex items-center gap-1">
               😐 Neutral
@@ -98,7 +105,7 @@ function ExamplesSection({ setResult, setLoading }) {
         )}
 
         {/* Negative Examples */}
-        {examples?.negative && (
+        {examples?.negative && examples.negative.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-1">
               😞 Negative
