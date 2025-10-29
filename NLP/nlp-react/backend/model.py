@@ -19,8 +19,10 @@ class SentimentAnalyzer:
         Initialize the sentiment analyzer
 
         Args:
-            model_name: Name of the pre-trained model to use
+            model_name: Name of the pre-trained model to use, or path to local model
         """
+        import os
+
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -37,7 +39,6 @@ class SentimentAnalyzer:
             model_source = model_name
             print(f"Loading model: {model_source}")
 
-        # Load tokenizer and model from the chosen source (local path or HF name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_source)
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_source,
@@ -46,7 +47,8 @@ class SentimentAnalyzer:
         )
         self.model.to(self.device)
         self.model.eval()
-        print(f"Model loaded on device: {self.device}")
+        print(f"✅ Model loaded successfully on device: {self.device}")
+
 
     @staticmethod
     def class_to_score(class_id: int) -> int:

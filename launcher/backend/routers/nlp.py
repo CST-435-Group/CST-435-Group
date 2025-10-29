@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Add NLP project to path
-nlp_project_path = Path(__file__).parent.parent.parent.parent / "nlp-react" / "backend"
+nlp_project_path = Path(__file__).parent.parent.parent.parent / "NLP" / "nlp-react" / "backend"
 sys.path.insert(0, str(nlp_project_path))
 
 try:
