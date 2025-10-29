@@ -1,13 +1,9 @@
-[build]
-builder = "NIXPACKS"
-nixpacksConfigPath = "nixpacks.toml"
+# Railway configuration
+# Note: This file can be deleted if you prefer to configure via Railway Dashboard
 
 [deploy]
-startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-
-[build.env]
-NIXPACKS_PYTHON_VERSION = "3.11"

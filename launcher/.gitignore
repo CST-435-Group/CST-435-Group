@@ -52,3 +52,7 @@ preprocessed_images/
 data/
 models/
 saved_model/
+
+# Dockerfile backups
+Dockerfile.backup
+Dockerfile.old
