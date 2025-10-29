@@ -17,22 +17,34 @@ class SentimentAnalyzer:
         Initialize the sentiment analyzer
 
         Args:
-            model_name: Name of the pre-trained model to use
+            model_name: Name of the pre-trained model to use, or path to local model
         """
+        import os
+
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        # Check if local saved model exists
+        local_model_path = os.path.join(os.path.dirname(__file__), "saved_model")
+
+        # Use local model if it exists and contains required files
+        if os.path.exists(local_model_path) and os.path.exists(os.path.join(local_model_path, "config.json")):
+            print(f"Loading model from local path: {local_model_path}")
+            model_source = local_model_path
+        else:
+            print(f"Loading model from HuggingFace: {model_name}")
+            model_source = model_name
+
         # Load model and tokenizer
-        print(f"Loading model: {model_name}")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_source)
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
+            model_source,
             num_labels=7,  # -3 to +3 scale = 7 classes
             ignore_mismatched_sizes=True
         )
         self.model.to(self.device)
         self.model.eval()
-        print(f"Model loaded on device: {self.device}")
+        print(f"✅ Model loaded successfully on device: {self.device}")
 
     @staticmethod
     def class_to_score(class_id: int) -> int:
