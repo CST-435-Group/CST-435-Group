@@ -1,0 +1,5 @@
+# This file tells Railway this is a Python project
+# Actual requirements are in backend/requirements.txt
+
+# Import backend requirements
+-r backend/requirements.txt

@@ -1,0 +1,10 @@
+# Railway configuration
+# IMPORTANT: In Railway Dashboard, set Root Directory to empty/blank or "."
+# This allows Railway to see the entire repository including parent projects
+
+[deploy]
+startCommand = "cd launcher/backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
