@@ -112,15 +112,29 @@ def load_ann_model():
     if ann_model is not None:
         return ann_model, ann_preprocessor, ann_data
 
+    if not ANN_AVAILABLE:
+        print("❌ ANN modules not available, cannot load model")
+        return None, None, None
+
     try:
+        print(f"🔄 Attempting to load ANN model from {ann_project_path}")
+
         # Load pre-trained model if it exists
         model_path = ann_project_path / "best_model.pth"
         data_path = ann_project_path / "data" / "nba_players.csv"
 
+        print(f"📁 Checking model path: {model_path}")
+        print(f"📁 Model exists: {model_path.exists()}")
+
         if not model_path.exists():
+            print(f"❌ Model file not found at {model_path}")
             raise FileNotFoundError(f"Model not found at {model_path}")
 
+        print(f"📁 Checking data path: {data_path}")
+        print(f"📁 Data exists: {data_path.exists()}")
+
         if not data_path.exists():
+            print(f"❌ Data file not found at {data_path}")
             raise FileNotFoundError(f"Data not found at {data_path}")
 
         # Load data
@@ -153,10 +167,15 @@ def load_ann_model():
         ann_data = df
 
         print("✅ ANN model loaded successfully!")
+        print(f"   - Model: {type(model).__name__}")
+        print(f"   - Data shape: {df.shape}")
+        print(f"   - Features shape: {features.shape}")
         return model, preprocessor, df
 
     except Exception as e:
-        print(f"❌ Error loading ANN model: {e}")
+        print(f"❌ Error loading ANN model: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None, None, None
 
 
@@ -301,6 +320,6 @@ async def get_all_players(limit: int = 20):
 @router.on_event("startup")
 async def startup_event():
     """Preload model on startup"""
-    # Uncomment to preload (uses more RAM)
-    # load_ann_model()
+    # Preload model for better UX (model loaded error won't appear)
+    load_ann_model()
     pass
