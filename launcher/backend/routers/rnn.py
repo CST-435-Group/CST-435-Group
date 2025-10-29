@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 import sys
 from pathlib import Path
-import httpx
 
 # Add RNN project to path
 rnn_project_path = Path(__file__).parent.parent.parent.parent / "rnn-text-generator" / "backend" / "app"
