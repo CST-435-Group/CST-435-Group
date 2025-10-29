@@ -67,7 +67,7 @@ def load_rnn_generator():
                 suffix = model_name.split('_')[-1]
                 tokenizer_path = MODEL_DIR / f"tokenizer_optimal_{suffix}.pkl"
             else:
-                tokenizer_path = MODEL_DIR / model_name.replace('model', 'tokenizer') + '.pkl'
+                tokenizer_path = MODEL_DIR / f"{model_name.replace('model', 'tokenizer')}.pkl"
 
             if model_path.exists() and tokenizer_path.exists():
                 generator.load_model(str(model_path), str(tokenizer_path))
@@ -344,7 +344,7 @@ async def switch_model(request: SwitchModelRequest):
             suffix = request.model_name.split('_')[-1]
             tokenizer_path = model_dir / f"tokenizer_optimal_{suffix}.pkl"
         else:
-            tokenizer_path = model_dir / request.model_name.replace('model', 'tokenizer') + '.pkl'
+            tokenizer_path = model_dir / f"{request.model_name.replace('model', 'tokenizer')}.pkl"
 
         if not tokenizer_path.exists():
             raise HTTPException(status_code=404, detail=f"Tokenizer for '{request.model_name}' not found")
