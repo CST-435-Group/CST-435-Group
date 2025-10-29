@@ -31,12 +31,13 @@ app.add_middleware(
 )
 
 # Import routers
-from routers import ann, cnn, nlp
+from routers import ann, cnn, nlp, rnn
 
 # Include routers with prefixes
 app.include_router(ann.router, prefix="/api/ann", tags=["ANN - NBA Team Selection"])
 app.include_router(cnn.router, prefix="/api/cnn", tags=["CNN - Fruit Classification"])
 app.include_router(nlp.router, prefix="/api/nlp", tags=["NLP - Sentiment Analysis"])
+app.include_router(rnn.router, prefix="/api/rnn", tags=["RNN - Text Generation"])
 
 
 # Root endpoints
@@ -61,6 +62,11 @@ async def root():
                 "name": "Sentiment Analysis",
                 "endpoint": "/api/nlp",
                 "description": "7-point scale sentiment analyzer for reviews"
+            },
+            "RNN": {
+                "name": "Text Generation",
+                "endpoint": "/api/rnn",
+                "description": "LSTM-based recurrent neural network for next-word prediction"
             }
         },
         "docs": "/docs"
@@ -73,6 +79,7 @@ async def health_check():
     from routers.ann import ann_model
     from routers.cnn import cnn_model
     from routers.nlp import nlp_analyzer
+    from routers.rnn import rnn_generator
 
     return {
         "status": "healthy",
@@ -88,6 +95,10 @@ async def health_check():
             "nlp": {
                 "status": "ready" if nlp_analyzer is not None else "not_loaded",
                 "model_loaded": nlp_analyzer is not None
+            },
+            "rnn": {
+                "status": "ready" if rnn_generator is not None else "not_loaded",
+                "model_loaded": rnn_generator is not None
             }
         }
     }

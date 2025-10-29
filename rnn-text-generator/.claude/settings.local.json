@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Stop-Process -Id 19116 -Force\")",
+      "Bash(powershell -Command \"Stop-Process -Id 22260 -Force\")",
+      "Bash(timeout:*)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m pip install deepmultilingualpunctuation)",
+      "Bash(powershell -Command \"Stop-Process -Id 12872 -Force\")",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m pip install spacy)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m spacy download en_core_web_sm)",
+      "Bash(powershell -Command \"Stop-Process -Id 19040 -Force\")",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m pip install \"numpy<2\")",
+      "Bash(powershell -Command \"Stop-Process -Id 15040 -Force\")",
+      "Bash(git push:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(powershell -Command \"Remove-Item -Recurse -Force ''frontend\\.git''\")",
+      "Bash(dir:*)",
+      "Bash(powershell -Command:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

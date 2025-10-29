@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Brain, Camera, MessageSquare, ArrowRight } from 'lucide-react'
+import { Brain, Camera, MessageSquare, MessageCircle, ArrowRight } from 'lucide-react'
 
 export default function Home() {
   const projects = [
@@ -44,6 +44,20 @@ export default function Home() {
         'Confidence scores',
         'Batch processing'
       ]
+    },
+    {
+      id: 'rnn',
+      title: 'RNN - Text Generation',
+      description: 'LSTM-based Recurrent Neural Network for next-word prediction and text generation trained on classical literature',
+      icon: MessageCircle,
+      color: 'from-indigo-500 to-indigo-700',
+      path: '/rnn',
+      features: [
+        'Classical literature training',
+        'Sampling & Beam search',
+        'Temperature control',
+        'Technical report viewer'
+      ]
     }
   ]
 
@@ -63,7 +77,7 @@ export default function Home() {
       </div>
 
       {/* Project Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
         {projects.map((project) => {
           const Icon = project.icon
           return (
@@ -115,7 +129,7 @@ export default function Home() {
         <div className="bg-white bg-opacity-90 rounded-2xl shadow-xl p-8">
           <h3 className="text-3xl font-bold text-gray-800 mb-4">About This Project</h3>
           <p className="text-gray-700 text-lg leading-relaxed mb-4">
-            This unified launcher provides access to three different machine learning projects developed for CST-435.
+            This unified launcher provides access to four different machine learning projects developed for CST-435.
             Each project demonstrates different neural network architectures and use cases:
           </p>
           <ul className="space-y-2 text-gray-700">
@@ -130,6 +144,10 @@ export default function Home() {
             <li className="flex items-start">
               <span className="font-semibold mr-2">•</span>
               <span><strong>NLP:</strong> Leverages Transformer models for natural language processing</span>
+            </li>
+            <li className="flex items-start">
+              <span className="font-semibold mr-2">•</span>
+              <span><strong>RNN:</strong> Utilizes LSTM networks for sequential learning and text generation</span>
             </li>
           </ul>
         </div>

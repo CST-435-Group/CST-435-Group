@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Large training data files (download at runtime if needed)
+backend/data/*.txt
+backend/data/books/
+
+# Visualizations (generated at runtime)
+backend/visualizations/
+
+# Training scripts (not needed in production)
+backend/scripts/download_data.py
+backend/scripts/download_training_books.py
+backend/scripts/combine_bibles.py
+
+# Keep only essential model files (exclude training checkpoints)
+backend/saved_models/model_best.pt
+backend/saved_models/model_val_acc_*.pt
+
+# Frontend (if building full-stack image)
+frontend/node_modules/
+frontend/build/
+frontend/.git/
+frontend/.env*
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+
+# Railway config
+.railway/
+railway.json
+railway.toml
+
+# Documentation
+README.md
+CLAUDE.md
+*.md

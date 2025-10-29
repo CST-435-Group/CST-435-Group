@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Brain, Camera, MessageSquare } from 'lucide-react'
+import { Home, Brain, Camera, MessageSquare, MessageCircle } from 'lucide-react'
 
 export default function Header() {
   const location = useLocation()
@@ -63,6 +63,18 @@ export default function Header() {
             >
               <MessageSquare size={20} />
               <span>NLP</span>
+            </Link>
+
+            <Link
+              to="/rnn"
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
+                isActive('/rnn')
+                  ? 'bg-blue-100 text-blue-700 font-semibold'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <MessageCircle size={20} />
+              <span>RNN</span>
             </Link>
           </nav>
         </div>

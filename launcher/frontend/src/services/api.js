@@ -53,6 +53,21 @@ export const nlpAPI = {
   unload: () => api.post('/nlp/unload'),
 }
 
+// RNN API calls
+export const rnnAPI = {
+  getInfo: () => api.get('/rnn/'),
+  getHealth: () => api.get('/rnn/health'),
+  getModelInfo: () => api.get('/rnn/model/info'),
+  generateText: (data) => api.post('/rnn/generate', data),
+  testModel: (useBeamSearch = true, beamWidth = 5) =>
+    api.get(`/rnn/model/test?use_beam_search=${useBeamSearch}&beam_width=${beamWidth}`),
+  getAvailableModels: () => api.get('/rnn/models/available'),
+  switchModel: (modelName) => api.post('/rnn/models/switch', { model_name: modelName }),
+  getTechnicalReport: () => api.get('/rnn/technical-report'),
+  preload: () => api.post('/rnn/preload'),
+  unload: () => api.post('/rnn/unload'),
+}
+
 // General API calls
 export const generalAPI = {
   getRoot: () => api.get('/'),
