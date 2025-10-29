@@ -13,6 +13,7 @@ from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
 import os
+from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -42,33 +43,52 @@ class SentimentDataset(Dataset):
 class SentimentAnalyzer:
     """Multi-scale sentiment analyzer using fine-tuned transformer"""
 
-    def __init__(self, 
+    def __init__(self,
                  model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
-                 data_path: str = '../../data/hospital_cleaned.csv',
-                 model_path: str = '../saved_model'):
+                 data_path: str = None,
+                 model_path: str = None):
         """
         Initialize the sentiment analyzer
-        
+
         Uses transfer learning:
         1. Starts with pre-trained RoBERTa sentiment model
         2. Fine-tunes on hospital review data to learn domain-specific patterns
-        
+
         Args:
             model_name: Base pre-trained model
-            data_path: Path to hospital CSV data
-            model_path: Path to save fine-tuned model
+            data_path: Path to hospital CSV data (auto-resolved if None)
+            model_path: Path to save fine-tuned model (auto-resolved if None)
         """
         self.model_name = model_name
-        self.data_path = data_path
-        self.model_path = model_path
+
+        # Auto-resolve paths relative to this file's location
+        current_dir = Path(__file__).parent
+
+        # Default data_path: look for data in NLP/data/hospital_cleaned.csv
+        if data_path is None:
+            self.data_path = str(current_dir.parent.parent / "data" / "hospital_cleaned.csv")
+        else:
+            self.data_path = data_path
+
+        # Default model_path: save in NLP/saved_model
+        if model_path is None:
+            self.model_path = str(current_dir.parent / "saved_model")
+        else:
+            self.model_path = model_path
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
+        # Debug: Print resolved paths
+        print(f"📁 Data path resolved to: {self.data_path}")
+        print(f"📁 Model path resolved to: {self.model_path}")
+        print(f"📁 Data file exists: {os.path.exists(self.data_path)}")
+
         # Check if fine-tuned model exists
-        if os.path.exists(os.path.join(model_path, 'pytorch_model.bin')) or \
-           os.path.exists(os.path.join(model_path, 'model.safetensors')):
-            print(f"✅ Loading fine-tuned model from {model_path}")
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
+        if os.path.exists(os.path.join(self.model_path, 'pytorch_model.bin')) or \
+           os.path.exists(os.path.join(self.model_path, 'model.safetensors')):
+            print(f"✅ Loading fine-tuned model from {self.model_path}")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+            self.model = AutoModelForSequenceClassification.from_pretrained(self.model_path)
         else:
             print(f"No fine-tuned model found. Training on hospital data...")
             self._train_model()
