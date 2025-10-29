@@ -3,6 +3,8 @@ Sentiment Analysis Model
 Handles model loading, inference, and result formatting
 """
 
+import os
+from pathlib import Path
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import warnings
@@ -22,11 +24,23 @@ class SentimentAnalyzer:
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Load model and tokenizer
-        print(f"Loading model: {model_name}")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # Prefer a local `saved_model/` in the backend folder if present.
+        # This lets you drop a HuggingFace-format model into `backend/saved_model/`
+        # and have the app load it automatically.
+        backend_dir = Path(__file__).resolve().parent
+        local_saved = backend_dir / "saved_model"
+
+        if local_saved.exists() and (local_saved / "config.json").exists():
+            model_source = str(local_saved)
+            print(f"Loading model from local path: {model_source}")
+        else:
+            model_source = model_name
+            print(f"Loading model: {model_source}")
+
+        # Load tokenizer and model from the chosen source (local path or HF name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_source)
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
+            model_source,
             num_labels=7,  # -3 to +3 scale = 7 classes
             ignore_mismatched_sizes=True
         )
