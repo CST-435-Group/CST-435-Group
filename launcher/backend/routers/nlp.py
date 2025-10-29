@@ -14,7 +14,7 @@ nlp_project_path = Path(__file__).parent.parent.parent.parent / "NLP" / "nlp-rea
 sys.path.insert(0, str(nlp_project_path))
 
 try:
-    from model import SentimentAnalyzer
+    from sentiment_model import SentimentAnalyzer
 except ImportError:
     print("Warning: Could not import NLP model. NLP endpoints will not work.")
     SentimentAnalyzer = None
@@ -73,7 +73,7 @@ async def nlp_info():
     """Get NLP project information"""
     return {
         "project": "Multi-Scale Sentiment Analysis",
-        "description": "7-point scale sentiment analyzer for movie reviews and text",
+        "description": "3-point scale sentiment analyzer for movie reviews and text",
         "endpoints": {
             "/health": "Check if model is loaded",
             "/analyze": "Analyze sentiment of single text",
@@ -149,8 +149,8 @@ async def analyze_sentiment(input_data: TextInput):
     - text: The text to analyze (movie review, comment, etc.)
 
     **Returns:**
-    - sentiment_score: Integer from -3 to +3
-    - sentiment_label: Descriptive label (e.g., "Very Positive")
+    - sentiment_score: Integer from 1 to 3
+    - sentiment_label: Descriptive label (e.g., "Positive")
     - emoji: Emoji representation
     - confidence: Model confidence (0-1)
     - probabilities: Probability distribution across all classes
@@ -199,31 +199,23 @@ async def get_examples():
     - Dictionary mapping sentiment levels to example reviews
     """
     examples = {
-        "-3": [
+        "1": [
             "This movie was absolutely terrible! Worst film I've ever seen.",
             "Complete waste of time and money. Awful in every way.",
-        ],
-        "-2": [
             "Very disappointing. Poor acting and weak plot.",
             "Not good at all. Would not recommend.",
         ],
-        "-1": [
+        "2": [
+            "It was okay. Nothing particularly special.",
+            "Average film. Neither good nor bad.",
             "The movie had potential but didn't deliver.",
             "Below average. Some moments but mostly forgettable.",
         ],
-        "0": [
-            "It was okay. Nothing particularly special.",
-            "Average film. Neither good nor bad.",
-        ],
-        "1": [
+        "3": [
             "Pretty decent movie. I enjoyed parts of it.",
             "Good film with some nice moments.",
-        ],
-        "2": [
             "Really great movie! Thoroughly enjoyed it.",
             "Excellent film with strong performances.",
-        ],
-        "3": [
             "Absolutely amazing! Best movie I've seen this year!",
             "Masterpiece! Incredible in every way!",
         ]
@@ -234,7 +226,7 @@ async def get_examples():
 @router.get("/sentiment-scale", response_model=Dict[int, Dict[str, str]])
 async def get_sentiment_scale():
     """
-    Get information about the 7-point sentiment scale
+    Get information about the 3-point sentiment scale
 
     **Returns:**
     - Dictionary mapping scores to labels and emojis
@@ -244,13 +236,9 @@ async def get_sentiment_scale():
     if analyzer is None:
         # Return default scale if analyzer not loaded
         return {
-            -3: {"label": "Very Negative", "emoji": "😡"},
-            -2: {"label": "Negative", "emoji": "😞"},
-            -1: {"label": "Slightly Negative", "emoji": "😕"},
-            0: {"label": "Neutral", "emoji": "😐"},
-            1: {"label": "Slightly Positive", "emoji": "🙂"},
-            2: {"label": "Positive", "emoji": "😊"},
-            3: {"label": "Very Positive", "emoji": "🤩"}
+            1: {"label": "Negative", "emoji": "😞"},
+            2: {"label": "Neutral", "emoji": "😐"},
+            3: {"label": "Positive", "emoji": "😊"}
         }
 
     return analyzer.get_sentiment_scale()

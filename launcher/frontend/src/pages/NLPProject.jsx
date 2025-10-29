@@ -63,12 +63,10 @@ export default function NLPProject() {
   }
 
   const getSentimentColor = (score) => {
-    if (score >= 2) return 'text-green-600 bg-green-100 border-green-400'
-    if (score >= 1) return 'text-green-500 bg-green-50 border-green-300'
-    if (score >= 0) return 'text-yellow-600 bg-yellow-100 border-yellow-400'
-    if (score >= -1) return 'text-orange-500 bg-orange-50 border-orange-300'
-    if (score >= -2) return 'text-red-500 bg-red-50 border-red-300'
-    return 'text-red-600 bg-red-100 border-red-400'
+    if (score === 3) return 'text-green-600 bg-green-100 border-green-400'
+    if (score === 2) return 'text-yellow-600 bg-yellow-100 border-yellow-400'
+    if (score === 1) return 'text-red-600 bg-red-100 border-red-400'
+    return 'text-gray-600 bg-gray-100 border-gray-400'
   }
 
   // Get top 3 probabilities
@@ -88,7 +86,7 @@ export default function NLPProject() {
           <MessageSquare size={48} className="text-purple-600 mr-4" />
           <div>
             <h1 className="text-4xl font-bold text-gray-800">Sentiment Analysis</h1>
-            <p className="text-gray-600 text-lg">7-Point Scale NLP Model for Text Classification</p>
+            <p className="text-gray-600 text-lg">3-Point Scale NLP Model for Text Classification</p>
           </div>
         </div>
       </div>
@@ -100,7 +98,7 @@ export default function NLPProject() {
             <Smile className="mr-3 text-purple-600" />
             Sentiment Scale
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {Object.entries(sentimentScale).map(([score, info]) => (
               <div
                 key={score}

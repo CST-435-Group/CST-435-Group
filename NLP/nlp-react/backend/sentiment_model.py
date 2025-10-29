@@ -173,22 +173,18 @@ class SentimentAnalyzer:
     def get_verbose_label(score: int) -> str:
         """Get descriptive (verbose) label for sentiment score"""
         labels = {
-            -3: "Negative",
-            -2: "Negative",
-            -1: "Slightly Negative",
-            0: "Neutral",
-            1: "Slightly Positive",
-            2: "Positive",
+            1: "Negative",
+            2: "Neutral",
             3: "Positive"
         }
         return labels.get(score, "Unknown")
 
     @staticmethod
     def get_sentiment_label(score: int) -> str:
-        """Map a score (-3..+3) to one of three condensed labels"""
-        if score < 0:
+        """Map a score (1-3) to one of three condensed labels"""
+        if score == 1:
             return "negative"
-        if score > 0:
+        if score == 3:
             return "positive"
         return "neutral"
 
@@ -196,20 +192,16 @@ class SentimentAnalyzer:
     def get_sentiment_emoji(score: int) -> str:
         """Get emoji for sentiment score"""
         emojis = {
-            -3: "😢",
-            -2: "😞",
-            -1: "😐",
-            0: "😶",
-            1: "🙂",
-            2: "😊",
-            3: "🤩"
+            1: "😞",
+            2: "😐",
+            3: "😊"
         }
         return emojis.get(score, "❓")
 
     def get_sentiment_scale(self) -> dict:
         """Get the complete sentiment scale information"""
         scale = {}
-        for i in range(-3, 4):
+        for i in range(1, 4):
             scale[i] = {
                 "label": self.get_sentiment_label(i),
                 "emoji": self.get_sentiment_emoji(i)
@@ -219,12 +211,12 @@ class SentimentAnalyzer:
     def analyze(self, text: str) -> dict:
         """
         Analyze sentiment using fine-tuned transformer
-        
-        Maps to 7-point scale: -3 (Very Negative) to +3 (Very Positive)
-        
+
+        Maps to 3-point scale: 1 (Negative), 2 (Neutral), 3 (Positive)
+
         Args:
             text: Text to analyze
-            
+
         Returns:
             Dictionary containing sentiment analysis results
         """
@@ -252,37 +244,27 @@ class SentimentAnalyzer:
 
         # Step 1: Check for neutral indicators (highest priority)
         text_lower = text.lower()
-        neutral_words = ['okay', 'ok', 'fine', 'average', 'decent', 'nothing special', 
+        neutral_words = ['okay', 'ok', 'fine', 'average', 'decent', 'nothing special',
                         'so-so', 'alright', 'fair', 'neither good nor bad', 'mixed',
                         'acceptable', 'satisfactory', 'moderate', 'mediocre']
         has_neutral = any(word in text_lower for word in neutral_words)
-        
-        # Step 2: Determine sentiment score
+
+        # Step 2: Determine sentiment score (1-3 scale)
         if has_neutral:
             # Force neutral if neutral indicators present
-            sentiment_score = 0
+            sentiment_score = 2  # Neutral
             confidence = 0.65
         elif predicted_class == 1:
             # Model predicted neutral
-            sentiment_score = 0
+            sentiment_score = 2  # Neutral
             confidence = model_confidence
         elif predicted_class == 0:
-            # NEGATIVE - map confidence to intensity
-            if model_confidence >= 0.99:
-                sentiment_score = -3  # Very Negative
-            elif model_confidence >= 0.95:
-                sentiment_score = -2  # Negative
-            else:
-                sentiment_score = -1  # Slightly Negative
+            # NEGATIVE
+            sentiment_score = 1  # Negative
             confidence = model_confidence
         else:  # predicted_class == 2
-            # POSITIVE - map confidence to intensity
-            if model_confidence >= 0.99:
-                sentiment_score = 3   # Very Positive
-            elif model_confidence >= 0.95:
-                sentiment_score = 2   # Positive
-            else:
-                sentiment_score = 1   # Slightly Positive
+            # POSITIVE
+            sentiment_score = 3  # Positive
             confidence = model_confidence
 
         # Get condensed label and verbose label
