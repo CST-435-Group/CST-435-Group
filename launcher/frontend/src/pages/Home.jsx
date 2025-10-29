@@ -34,13 +34,13 @@ export default function Home() {
     {
       id: 'nlp',
       title: 'NLP - Sentiment Analysis',
-      description: '7-point scale sentiment analyzer for movie reviews and text using transformer models',
+      description: '3-point scale sentiment analyzer for hospital reviews and healthcare feedback using transformer models',
       icon: MessageSquare,
       color: 'from-purple-500 to-purple-700',
       path: '/nlp',
       features: [
-        '7-point sentiment scale (-3 to +3)',
-        'Movie review analysis',
+        '3-point sentiment scale (1-3)',
+        'Hospital review analysis',
         'Confidence scores',
         'Batch processing'
       ]
