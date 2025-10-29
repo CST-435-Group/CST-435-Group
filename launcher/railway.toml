@@ -1,9 +1,9 @@
 # Railway configuration
-# Important: Set Root Directory to "launcher" (not "launcher/backend")
-# This allows access to parent projects (ANN_Project, CNN_Project, nlp-react)
+# IMPORTANT: In Railway Dashboard, set Root Directory to empty/blank or "."
+# This allows Railway to see the entire repository including parent projects
 
 [deploy]
-startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+startCommand = "cd launcher/backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
