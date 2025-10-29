@@ -204,10 +204,61 @@ async def health_check():
             "error": "ANN project files not accessible in this deployment"
         }
 
-    model, _, _ = load_ann_model()
     return {
-        "status": "ready" if model is not None else "not_loaded",
-        "model_loaded": model is not None
+        "status": "ready" if ann_model is not None else "not_loaded",
+        "model_loaded": ann_model is not None
+    }
+
+
+@router.post("/preload")
+async def preload_model():
+    """Preload the ANN model into memory"""
+    global ann_model
+
+    if not ANN_AVAILABLE:
+        raise HTTPException(status_code=503, detail="ANN project files not accessible")
+
+    if ann_model is not None:
+        return {
+            "status": "already_loaded",
+            "message": "ANN model is already loaded"
+        }
+
+    print("🔄 Preloading ANN model on user request...")
+    model, preprocessor, data = load_ann_model()
+
+    if model is None:
+        raise HTTPException(status_code=500, detail="Failed to load ANN model")
+
+    return {
+        "status": "loaded",
+        "message": "ANN model loaded successfully"
+    }
+
+
+@router.post("/unload")
+async def unload_model():
+    """Unload the ANN model from memory"""
+    global ann_model, ann_preprocessor, ann_data
+
+    if ann_model is None:
+        return {
+            "status": "not_loaded",
+            "message": "ANN model was not loaded"
+        }
+
+    print("🗑️ Unloading ANN model to free memory...")
+    ann_model = None
+    ann_preprocessor = None
+    ann_data = None
+
+    # Force garbage collection to free memory immediately
+    import gc
+    gc.collect()
+
+    return {
+        "status": "unloaded",
+        "message": "ANN model unloaded successfully"
     }
 
 

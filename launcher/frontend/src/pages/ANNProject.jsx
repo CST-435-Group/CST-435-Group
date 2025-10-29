@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { annAPI } from '../services/api'
+import { annAPI, cnnAPI, nlpAPI } from '../services/api'
 import { Brain, Users, TrendingUp, AlertCircle } from 'lucide-react'
+import { useModelManager } from '../hooks/useModelManager'
 
 export default function ANNProject() {
   const [loading, setLoading] = useState(false)
@@ -9,6 +10,9 @@ export default function ANNProject() {
   const [team, setTeam] = useState(null)
   const [topPlayers, setTopPlayers] = useState([])
   const [method, setMethod] = useState('balanced')
+
+  // Preload ANN model and unload others when this page loads
+  useModelManager(annAPI, [cnnAPI, nlpAPI])
 
   useEffect(() => {
     loadDataInfo()
