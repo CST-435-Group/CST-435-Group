@@ -151,8 +151,8 @@ def load_cnn_model():
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
 
-        # Load model
-        checkpoint = torch.load(model_path, map_location='cpu')
+        # Load model (weights_only=False needed for PyTorch 2.6+ compatibility)
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
 
         model = FruitCNN(num_classes=metadata['num_classes'])
         model.load_state_dict(checkpoint['model_state_dict'])

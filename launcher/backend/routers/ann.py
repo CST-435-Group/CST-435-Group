@@ -148,16 +148,25 @@ def load_ann_model():
 
         # Load model
         device = get_device()
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
 
-        model = create_model(
-            input_dim=features.shape[1],
-            config={
-                'hidden_dims': [256, 128, 64, 32],
+        # Get config from checkpoint if available, otherwise use defaults
+        if 'config' in checkpoint:
+            model_config = checkpoint['config']
+            print(f"📋 Loaded config from checkpoint: {model_config}")
+        else:
+            # Fallback config - try to infer from state_dict
+            print("⚠️ No config in checkpoint, using default architecture")
+            model_config = {
+                'hidden_dims': [64, 32],  # Match the saved model architecture
                 'dropout_rate': 0.25,
                 'activation': 'relu',
                 'use_batch_norm': True
             }
+
+        model = create_model(
+            input_dim=features.shape[1],
+            config=model_config
         )
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
