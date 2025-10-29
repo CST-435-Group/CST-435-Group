@@ -320,6 +320,7 @@ async def get_all_players(limit: int = 20):
 @router.on_event("startup")
 async def startup_event():
     """Preload model on startup"""
-    # Preload model for better UX (model loaded error won't appear)
-    load_ann_model()
+    # Disabled for low RAM environments - model will load on first request
+    # Uncomment below to preload (uses more RAM but faster first request)
+    # load_ann_model()
     pass
