@@ -46,18 +46,20 @@ class SentimentAnalyzer:
     def __init__(self,
                  model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
                  data_path: str = None,
-                 model_path: str = None):
+                 model_path: str = None,
+                 use_pretrained_only: bool = True):
         """
         Initialize the sentiment analyzer
 
         Uses transfer learning:
         1. Starts with pre-trained RoBERTa sentiment model
-        2. Fine-tunes on hospital review data to learn domain-specific patterns
+        2. Optionally fine-tunes on hospital review data to learn domain-specific patterns
 
         Args:
             model_name: Base pre-trained model
             data_path: Path to hospital CSV data (auto-resolved if None)
             model_path: Path to save fine-tuned model (auto-resolved if None)
+            use_pretrained_only: If True, skip fine-tuning and use pre-trained model directly (default: True)
         """
         self.model_name = model_name
 
@@ -89,10 +91,22 @@ class SentimentAnalyzer:
             print(f"✅ Loading fine-tuned model from {self.model_path}")
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
             self.model = AutoModelForSequenceClassification.from_pretrained(self.model_path)
+        elif use_pretrained_only:
+            # Use pre-trained model directly without fine-tuning
+            print(f"✅ Using pre-trained model: {self.model_name} (no fine-tuning)")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
         else:
+            # Attempt to fine-tune (requires accelerate package)
             print(f"No fine-tuned model found. Training on hospital data...")
-            self._train_model()
-        
+            try:
+                self._train_model()
+            except Exception as e:
+                print(f"⚠️ Fine-tuning failed: {e}")
+                print(f"✅ Falling back to pre-trained model: {self.model_name}")
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+
         self.model.to(self.device)
         self.model.eval()
         print(f"✅ Model ready on device: {self.device}\n")
