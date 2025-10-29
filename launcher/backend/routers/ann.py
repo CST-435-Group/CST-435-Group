@@ -13,16 +13,49 @@ import sys
 import os
 from pathlib import Path
 
-# Add ANN_Project to path
-ann_project_path = Path(__file__).parent.parent.parent.parent / "ANN_Project"
-sys.path.insert(0, str(ann_project_path))
+# Try to import ANN modules - they may not be available in Railway
+try:
+    # Add ANN_Project to path - try multiple locations
+    possible_paths = [
+        Path(__file__).parent.parent.parent.parent / "ANN_Project",  # Repository root
+        Path(__file__).parent.parent.parent / "ANN_Project",          # From launcher
+        Path("/app") / ".." / "ANN_Project",                          # Railway one level up
+    ]
 
-# Import ANN modules
-from src.model import create_model
-from src.select_team import TeamSelector
-from src.preprocess import NBADataPreprocessor
-from src.load_data import load_nba_data, get_feature_columns, create_position_labels
-from src.utils import get_device
+    ann_project_path = None
+    for path in possible_paths:
+        resolved = path.resolve()
+        if resolved.exists():
+            ann_project_path = resolved
+            sys.path.insert(0, str(ann_project_path))
+            print(f"✅ Found ANN_Project at: {ann_project_path}")
+            break
+
+    if ann_project_path is None:
+        print("❌ ANN_Project not found in any of these locations:")
+        for p in possible_paths:
+            print(f"   - {p.resolve()}")
+        raise ImportError("ANN_Project directory not accessible")
+
+    # Import ANN modules
+    from src.model import create_model
+    from src.select_team import TeamSelector
+    from src.preprocess import NBADataPreprocessor
+    from src.load_data import load_nba_data, get_feature_columns, create_position_labels
+    from src.utils import get_device
+
+    ANN_AVAILABLE = True
+except Exception as e:
+    print(f"❌ Failed to import ANN modules: {e}")
+    ANN_AVAILABLE = False
+    # Create dummy objects so the router can still load
+    create_model = None
+    TeamSelector = None
+    NBADataPreprocessor = None
+    load_nba_data = None
+    get_feature_columns = None
+    create_position_labels = None
+    get_device = None
 
 # Create router
 router = APIRouter()
@@ -145,6 +178,13 @@ async def ann_info():
 @router.get("/health")
 async def health_check():
     """Check if ANN model is loaded"""
+    if not ANN_AVAILABLE:
+        return {
+            "status": "unavailable",
+            "model_loaded": False,
+            "error": "ANN project files not accessible in this deployment"
+        }
+
     model, _, _ = load_ann_model()
     return {
         "status": "ready" if model is not None else "not_loaded",
