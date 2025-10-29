@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix ANN model loading in Railway deployment\n\n- Enable ANN model preloading on startup for better UX\n- Add detailed error logging to diagnose model loading issues\n- Fix .gitignore excluding model files and data from deployment\n- Allow *.pth, *.csv, and data/ directories to be included in deployment\n\nThe previous .gitignore was preventing the ANN model files and NBA data\nfrom being deployed to Railway, causing \"Model not loaded\" errors in the\nfrontend.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

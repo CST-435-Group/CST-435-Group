@@ -1,0 +1,19 @@
+{
+  "name": "cst-435-launcher-root",
+  "version": "1.0.0",
+  "description": "Unified launcher for CST-435 ML Projects",
+  "scripts": {
+    "install:frontend": "cd frontend && npm install",
+    "install:backend": "cd backend && pip install -r requirements.txt",
+    "install:all": "npm run install:frontend && npm run install:backend",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && python main.py",
+    "build:frontend": "cd frontend && npm run build",
+    "preview:frontend": "cd frontend && npm run preview",
+    "test:backend": "cd backend && curl http://localhost:8000/health",
+    "test:frontend": "cd frontend && curl http://localhost:3000"
+  },
+  "keywords": ["machine-learning", "neural-networks", "fastapi", "react", "cst-435"],
+  "author": "CST-435 Team",
+  "license": "MIT"
+}
