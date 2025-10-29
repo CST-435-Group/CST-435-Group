@@ -138,23 +138,41 @@ vercel --prod
    - Choose `CST-435-Group` repository
 
 3. **Configure Build**
-   - Railway will automatically detect `railway.toml`
-   - Set root directory to `launcher`
+   - Railway will automatically detect `railway.toml` and `nixpacks.toml`
+   - **Important**: Railway looks at the `launcher` directory
+   - No need to set root directory manually
    - Railway will use the start command from `railway.toml`
 
-4. **Environment Variables**
-   - `PORT` - Automatically set by Railway
-   - `PYTHON_VERSION` - Set to `3.11`
+4. **If Build Fails with "Unable to generate build plan"**
 
-5. **Model Files**
+   **Quick Fix Option 1** - Set Root Directory:
+   - Go to Settings → "Root Directory"
+   - Set to `backend`
+   - Update "Start Command" to: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - Redeploy
+
+   **Quick Fix Option 2** - Use Dockerfile:
+   - Go to Settings → "Builder"
+   - Select "Dockerfile"
+   - Set "Dockerfile Path" to `launcher/Dockerfile`
+   - Redeploy
+
+   See `RAILWAY_FIX.md` for detailed troubleshooting.
+
+5. **Environment Variables**
+   - `PORT` - Automatically set by Railway
+   - `PYTHON_VERSION` - Already configured in `railway.toml`
+
+6. **Model Files**
    - Ensure model files exist in their respective project directories:
      - `ANN_Project/best_model.pth`
      - `CNN_Project/models/best_model.pth`
      - `CNN_Project/models/model_metadata.json`
 
-6. **First Deployment**
-   - First deployment will take 10-15 minutes (downloading models)
+7. **First Deployment**
+   - First deployment will take 10-15 minutes (downloading PyTorch + models)
    - Subsequent deployments will be faster
+   - Watch logs for progress
 
 ## API Endpoints
 
