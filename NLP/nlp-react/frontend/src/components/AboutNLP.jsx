@@ -56,6 +56,57 @@ function AboutNLP() {
             </div>
           </div>
 
+            {/* Data Collection & Cleaning */}
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4">
+                <BookOpen className="w-6 h-6 text-teal-600" />
+                <h3 className="text-2xl font-bold text-gray-800">Data & Cleaning</h3>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 space-y-3">
+                <p className="text-gray-700">
+                  This project uses hospital review data (CSV) that must be cleaned before training or
+                  inference. The cleaning steps are implemented in <code>data/clean_data.py</code> and in
+                  backend preprocessors. Key steps include:
+                </p>
+                <ul className="list-disc list-inside text-gray-600 space-y-1">
+                  <li>Drop rows with missing review text or essential labels (Feedback, Ratings or Sentiment Label).</li>
+                  <li>Normalize text to lowercase and remove HTML, URLs and email addresses.</li>
+                  <li>Handle contractions and negations ("can't" → "cannot", "didn't" → "did not") so sentiment is preserved.</li>
+                  <li>Remove punctuation and extra whitespace, then tokenize and lemmatize words (NLTK lemmatizer used in classical pipeline).</li>
+                  <li>Carefully manage stop words: keep negation words (not, never) and sentiment-bearing tokens (good, bad).</li>
+                  <li>Map labels to modeling scheme: some datasets use Ratings (1-5) or binary Sentiment Label (0/1). The code maps these to either a 3-class scheme (negative/neutral/positive) or a 7-point scale when relevant.</li>
+                  <li>Save the cleaned CSV as <code>data/hospital_cleaned.csv</code> for reproducible training and evaluation.</li>
+                </ul>
+                <p className="text-sm text-gray-500">
+                  See <code>data/clean_data.py</code> and the backend files <code>main_sentiment.py</code> and
+                  <code>sentiment_model.py</code> for the exact cleaning rules and label mappings used by the app.
+                </p>
+              </div>
+            </div>
+
+            {/* Labeling and neutral-handling note */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <BookOpen className="w-5 h-5 text-teal-600" />
+                <h4 className="text-lg font-semibold text-gray-800">Labels & how "Neutral" is handled</h4>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-gray-700">
+                <p className="mb-2">
+                  Many hospital datasets only include <strong>binary</strong> sentiment labels (for example <code>0</code> = negative, <code>1</code> = positive).
+                  That means there is no explicit "neutral" label in the raw data, so the app applies simple, transparent rules to infer neutrality when needed.
+                </p>
+                <ul className="list-disc list-inside text-gray-600 space-y-1">
+                  <li><strong>Ratings mapping:</strong> When raw ratings (1–5) exist we map them to a numeric sentiment score and treat middle values as neutral.</li>
+                  <li><strong>Model-predicted neutral:</strong> Our 3-class transformer may predict a neutral class directly; when it does we keep that as neutral.</li>
+                  <li><strong>Heuristics:</strong> Short heuristics inspect the text for neutral indicators (words like "okay", "average", "nothing special") and lower-confidence predictions to prefer neutral.</li>
+                  <li><strong>Confidence thresholds:</strong> Very low confidence or conflicting signals (mixed words) are treated conservatively as neutral rather than forcing positive/negative.</li>
+                </ul>
+                <p className="text-sm text-gray-500 mt-2">
+                  These choices are pragmatic: they make the UI and statistics more stable when the source labels are coarse (0/1). If you prefer a stricter mapping (no inferred neutrals) or a different heuristic, I can update the rules or expose a switch in the UI.
+                </p>
+              </div>
+            </div>
+
           <div className="flex gap-4 items-start">
             <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-1" />
             <div>

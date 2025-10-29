@@ -40,18 +40,27 @@ class SentimentAnalyzer:
         return class_id - 3
 
     @staticmethod
-    def get_sentiment_label(score: int) -> str:
-        """Get descriptive label for sentiment score"""
+    def get_verbose_label(score: int) -> str:
+        """Get descriptive (verbose) label for sentiment score"""
         labels = {
-            -3: "Very Negative",
+            -3: "Negative",
             -2: "Negative",
             -1: "Slightly Negative",
             0: "Neutral",
             1: "Slightly Positive",
             2: "Positive",
-            3: "Very Positive"
+            3: "Positive"
         }
         return labels.get(score, "Unknown")
+
+    @staticmethod
+    def get_sentiment_label(score: int) -> str:
+        """Map a score (-3..+3) to one of three condensed labels"""
+        if score < 0:
+            return "negative"
+        if score > 0:
+            return "positive"
+        return "neutral"
 
     @staticmethod
     def get_sentiment_emoji(score: int) -> str:
@@ -112,20 +121,29 @@ class SentimentAnalyzer:
 
         # Convert to sentiment score
         sentiment_score = self.class_to_score(predicted_class)
+
+        # condensed label for frontend/backend (negative/neutral/positive)
         sentiment_label = self.get_sentiment_label(sentiment_score)
+        # also keep a verbose label if needed (collapsed -3/3 -> Negative/Positive)
+        sentiment_label_verbose = self.get_verbose_label(sentiment_score)
         emoji = self.get_sentiment_emoji(sentiment_score)
 
         # Create probability distribution dictionary
-        prob_dict = {}
-        for i in range(7):
-            score = self.class_to_score(i)
-            label = self.get_sentiment_label(score)
-            prob_dict[f"{score:+d} ({label})"] = float(probabilities[0][i].item())
+        # Aggregate probabilities into three buckets: negative, neutral, positive
+        neg_prob = float(sum(probabilities[0][i].item() for i in range(0, 3)))
+        neu_prob = float(probabilities[0][3].item())
+        pos_prob = float(sum(probabilities[0][i].item() for i in range(4, 7)))
+        prob_dict = {
+            "negative": neg_prob,
+            "neutral": neu_prob,
+            "positive": pos_prob
+        }
 
         return {
             "text": text,
             "sentiment_score": sentiment_score,
             "sentiment_label": sentiment_label,
+            "sentiment_label_verbose": sentiment_label_verbose,
             "emoji": emoji,
             "confidence": float(confidence),
             "probabilities": prob_dict

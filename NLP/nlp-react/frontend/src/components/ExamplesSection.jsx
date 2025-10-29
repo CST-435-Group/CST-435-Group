@@ -13,14 +13,44 @@ function ExamplesSection({ setResult, setLoading }) {
   const loadExamples = async () => {
     try {
       const data = await getExamples();
-      // Transform backend format {"-3": [...], "0": [...], "3": [...]}
-      // to frontend format {negative: [...], neutral: [...], positive: [...]}
-      const transformed = {
-        positive: [...(data["2"] || []), ...(data["3"] || [])],
-        neutral: [...(data["-1"] || []), ...(data["0"] || []), ...(data["1"] || [])],
-        negative: [...(data["-3"] || []), ...(data["-2"] || [])]
-      };
-      setExamples(transformed);
+      // Backend may return either 7-point buckets ("-3".."3") or three buckets (negative/neutral/positive).
+      let negativeExamples = [];
+      let neutralExamples = [];
+      let positiveExamples = [];
+
+      if (data && (data.negative || data.neutral || data.positive)) {
+        // New backend shape
+        negativeExamples = data.negative || [];
+        neutralExamples = data.neutral || [];
+        positiveExamples = data.positive || [];
+      } else {
+        // Old backend shape: aggregate -3..+3
+        negativeExamples = [
+          ...(data["-3"] || []),
+          ...(data["-2"] || []),
+          ...(data["-1"] || []),
+        ];
+        neutralExamples = [...(data["0"] || [])];
+        positiveExamples = [
+          ...(data["1"] || []),
+          ...(data["2"] || []),
+          ...(data["3"] || []),
+        ];
+      }
+
+      // Build three buckets (positive, neutral, negative). Backend now returns these keys.
+      const positive = data.positive || positiveExamples || [];
+      const neutral = data.neutral || neutralExamples || [];
+      const negative = data.negative || negativeExamples || [];
+
+      const transformed = [
+        { key: "positive", label: "😊 Positive", color: "green", examples: positive },
+        { key: "neutral", label: "😐 Neutral", color: "yellow", examples: neutral },
+        { key: "negative", label: "😞 Negative", color: "red", examples: negative }
+      ];
+
+      // Filter out empty sections but keep order
+      setExamples(transformed.filter(s => s.examples && s.examples.length > 0));
     } catch (error) {
       console.error('Failed to load examples:', error);
     } finally {
@@ -64,65 +94,26 @@ function ExamplesSection({ setResult, setLoading }) {
       </p>
 
       <div className="space-y-3">
-        {/* Positive Examples */}
-        {examples?.positive && examples.positive.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-green-600 mb-2 flex items-center gap-1">
-              😊 Positive
-            </h3>
-            <div className="space-y-2">
-              {examples.positive.map((example, index) => (
-                <button
-                  key={`pos-${index}`}
-                  onClick={() => handleExampleClick(example)}
-                  className="w-full text-left p-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg text-sm text-gray-700 transition-colors"
-                >
-                  {example}
-                </button>
-              ))}
+        {examples.map((section) => (
+          section.examples.length > 0 && (
+            <div key={section.key}>
+              <h3 className={`text-sm font-semibold text-${section.color}-600 mb-2 flex items-center gap-1`}>
+                {section.label}
+              </h3>
+              <div className="space-y-2">
+                {section.examples.map((example, idx) => (
+                  <button
+                    key={`${section.key}-${idx}`}
+                    onClick={() => handleExampleClick(example)}
+                    className={`w-full text-left p-3 bg-${section.color}-50 hover:bg-${section.color}-100 border border-${section.color}-200 rounded-lg text-sm text-gray-700 transition-colors`}
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Neutral Examples */}
-        {examples?.neutral && examples.neutral.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-yellow-600 mb-2 flex items-center gap-1">
-              😐 Neutral
-            </h3>
-            <div className="space-y-2">
-              {examples.neutral.map((example, index) => (
-                <button
-                  key={`neu-${index}`}
-                  onClick={() => handleExampleClick(example)}
-                  className="w-full text-left p-3 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded-lg text-sm text-gray-700 transition-colors"
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Negative Examples */}
-        {examples?.negative && examples.negative.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-1">
-              😞 Negative
-            </h3>
-            <div className="space-y-2">
-              {examples.negative.map((example, index) => (
-                <button
-                  key={`neg-${index}`}
-                  onClick={() => handleExampleClick(example)}
-                  className="w-full text-left p-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg text-sm text-gray-700 transition-colors"
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+          )
+        ))}
       </div>
     </div>
   );

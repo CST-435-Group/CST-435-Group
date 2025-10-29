@@ -1,345 +1,343 @@
 """
-Optimized Sentiment Analysis Model for Maximum Accuracy
-Handles data preprocessing, model training, and predictions
+Sentiment Analysis Model using Fine-tuned Transformer
+Academic approach: Transfer learning + domain-specific fine-tuning
+Properly handles: Very Negative, Negative, Neutral, Positive, Very Positive
 """
 
-import numpy as np
+import torch
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+)
+from torch.utils.data import Dataset
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
-from bs4 import BeautifulSoup
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
-import re
-import string
+import numpy as np
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import LinearSVC
-from sklearn.metrics import (
-    accuracy_score, 
-    classification_report, 
-    confusion_matrix,
-    precision_recall_fscore_support
-)
-import pickle
-import os
 
-sns.set_style('whitegrid')
-plt.rcParams['figure.figsize'] = (12, 6)
+class SentimentDataset(Dataset):
+    """PyTorch Dataset for sentiment analysis"""
+    
+    def __init__(self, texts, labels, tokenizer, max_length=512):
+        self.encodings = tokenizer(
+            texts, 
+            truncation=True, 
+            padding=True, 
+            max_length=max_length,
+            return_tensors='pt'
+        )
+        self.labels = labels
+    
+    def __getitem__(self, idx):
+        item = {key: val[idx] for key, val in self.encodings.items()}
+        item['labels'] = torch.tensor(self.labels[idx])
+        return item
+    
+    def __len__(self):
+        return len(self.labels)
 
 
 class SentimentAnalyzer:
-    """Optimized sentiment analyzer for hospital reviews"""
-    
-    def __init__(self, data_path='../data/hospital.csv'):
+    """Multi-scale sentiment analyzer using fine-tuned transformer"""
+
+    def __init__(self, 
+                 model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
+                 data_path: str = '../../data/hospital_cleaned.csv',
+                 model_path: str = '../saved_model'):
+        """
+        Initialize the sentiment analyzer
+        
+        Uses transfer learning:
+        1. Starts with pre-trained RoBERTa sentiment model
+        2. Fine-tunes on hospital review data to learn domain-specific patterns
+        
+        Args:
+            model_name: Base pre-trained model
+            data_path: Path to hospital CSV data
+            model_path: Path to save fine-tuned model
+        """
+        self.model_name = model_name
         self.data_path = data_path
-        self.df = None
-        self.vectorizer = None
-        self.model = None
-        self.X_train = None
-        self.X_test = None
-        self.y_train = None
-        self.y_test = None
+        self.model_path = model_path
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        self._download_nltk_resources()
-        self.lemmatizer = WordNetLemmatizer()
-        self.stop_words = set(stopwords.words('english'))
-        
-        # Keep important sentiment words
-        self.stop_words = self.stop_words - {
-            'not', 'no', 'nor', 'neither', 'never', 'none',
-            'good', 'bad', 'best', 'worst', 'great', 'terrible',
-            'very', 'too', 'more', 'most', 'less', 'least',
-            'really', 'quite', 'rather', 'somewhat'
-        }
-    
-    @staticmethod
-    def _download_nltk_resources():
-        print("Downloading NLTK resources...")
-        for resource in ['punkt', 'stopwords', 'wordnet', 'averaged_perceptron_tagger', 'omw-1.4']:
-            try:
-                nltk.download(resource, quiet=True)
-            except:
-                pass
-        print("✅ NLTK resources ready\n")
-    
-    def load_data(self, text_column='Feedback', rating_column='Rating'):
-        print("="*80)
-        print("LOADING DATA")
-        print("="*80)
-        
-        self.df = pd.read_csv(self.data_path)
-        print(f"\n✅ Loaded {len(self.df)} reviews")
-        
-        self.text_column = text_column
-        self.rating_column = rating_column
-        
-        return self.df
-    
-    def preprocess_and_visualize(self):
-        print("\n" + "="*80)
-        print("PREPROCESSING")
-        print("="*80)
-        
-        # Handle missing values
-        initial_count = len(self.df)
-        self.df = self.df.dropna(subset=[self.text_column, self.rating_column])
-        removed = initial_count - len(self.df)
-        if removed > 0:
-            print(f"Removed {removed} rows with missing values")
-        
-        # Create sentiment labels
-        self.df['sentiment'] = self.df[self.rating_column].apply(self._rating_to_sentiment)
-        
-        sentiment_counts = self.df['sentiment'].value_counts()
-        print(f"\nSentiment Distribution:")
-        for sentiment, count in sentiment_counts.items():
-            pct = (count / len(self.df)) * 100
-            print(f"  {sentiment}: {count} ({pct:.1f}%)")
-        
-        return self.df
-    
-    @staticmethod
-    def _rating_to_sentiment(rating):
-        """Convert rating to sentiment - more balanced thresholds"""
-        if rating <= 2:
-            return 'negative'
-        elif rating == 3:
-            return 'neutral'
+        # Check if fine-tuned model exists
+        if os.path.exists(os.path.join(model_path, 'pytorch_model.bin')) or \
+           os.path.exists(os.path.join(model_path, 'model.safetensors')):
+            print(f"✅ Loading fine-tuned model from {model_path}")
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
         else:
-            return 'positive'
-    
-    def clean_text(self, text):
-        """Advanced text cleaning that preserves sentiment"""
-        text = str(text).lower()
+            print(f"No fine-tuned model found. Training on hospital data...")
+            self._train_model()
         
-        # Remove HTML
-        text = BeautifulSoup(text, 'html.parser').get_text()
-        
-        # Remove URLs and emails
-        text = re.sub(r'http\S+|www\S+|https\S+', '', text)
-        text = re.sub(r'\S+@\S+', '', text)
-        
-        # Handle negations (CRITICAL for sentiment)
-        text = re.sub(r"n't", " not", text)
-        text = re.sub(r"won't", "will not", text)
-        text = re.sub(r"can't", "cannot", text)
-        
-        # Keep exclamation/question marks as features
-        text = re.sub(r'!+', ' EXCLAMATION ', text)
-        text = re.sub(r'\?+', ' QUESTION ', text)
-        
-        # Remove punctuation (except spaces)
-        text = re.sub(r'[^\w\s]', ' ', text)
-        
-        # Remove extra whitespace
-        text = re.sub(r'\s+', ' ', text).strip()
-        
-        # Tokenize
-        tokens = word_tokenize(text)
-        
-        # Lemmatize but keep important words
-        tokens = [
-            self.lemmatizer.lemmatize(word) 
-            for word in tokens 
-            if (word not in self.stop_words or word in ['not', 'no', 'never']) and len(word) > 1
-        ]
-        
-        return ' '.join(tokens)
-    
-    def build_model(self, test_size=0.2, random_state=42):
-        """Build optimized model"""
+        self.model.to(self.device)
+        self.model.eval()
+        print(f"✅ Model ready on device: {self.device}\n")
+
+    def _train_model(self):
+        """Fine-tune the model on hospital data"""
         print("\n" + "="*80)
-        print("BUILDING MODEL")
-        print("="*80)
+        print("FINE-TUNING TRANSFORMER ON HOSPITAL DATA")
+        print("="*80 + "\n")
         
-        # Clean text
-        print("\n--- Cleaning Text ---")
-        self.df['cleaned_text'] = self.df[self.text_column].apply(self.clean_text)
+        # Load data
+        print("Loading hospital data...")
+        df = pd.read_csv(self.data_path)
+        df = df.dropna(subset=['Feedback', 'Sentiment Label'])
         
-        # Show example
-        if len(self.df) > 0:
-            print(f"\nExample cleaning:")
-            print(f"Original: {self.df[self.text_column].iloc[0][:100]}")
-            print(f"Cleaned:  {self.df['cleaned_text'].iloc[0][:100]}")
+        # Use Sentiment Label: 0=negative, 1=positive
+        # Model expects 3 classes: 0=neg, 1=neu, 2=pos
+        # Since we only have binary labels, we'll use: 0=neg, 2=pos
+        df['label'] = df['Sentiment Label'].apply(lambda x: 2 if x == 1 else 0)
         
-        # Prepare data
-        X = self.df['cleaned_text']
-        y = self.df['sentiment']
+        print(f"Loaded {len(df)} reviews")
+        print(f"Label distribution:\n{df['label'].value_counts().sort_index()}\n")
         
-        # Split with stratification
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y
-        )
-        print(f"\nTrain: {len(self.X_train)} | Test: {len(self.X_test)}")
-        
-        # Optimized TF-IDF
-        print("\n--- TF-IDF Vectorization ---")
-        self.vectorizer = TfidfVectorizer(
-            max_features=15000,
-            ngram_range=(1, 3),
-            min_df=2,
-            max_df=0.85,
-            sublinear_tf=True,
-            use_idf=True,
-            smooth_idf=True,
-            norm='l2'
+        # Split data
+        from sklearn.model_selection import train_test_split
+        train_texts, val_texts, train_labels, val_labels = train_test_split(
+            df['Feedback'].tolist(),
+            df['label'].tolist(),
+            test_size=0.2,
+            random_state=42,
+            stratify=df['label']
         )
         
-        X_train_tfidf = self.vectorizer.fit_transform(self.X_train)
-        X_test_tfidf = self.vectorizer.transform(self.X_test)
+        print(f"Train samples: {len(train_texts)}")
+        print(f"Val samples: {len(val_texts)}\n")
         
-        print(f"Features: {X_train_tfidf.shape[1]}")
+        # Load base model and tokenizer
+        print(f"Loading base model: {self.model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            self.model_name,
+            num_labels=3,  # negative, neutral, positive
+            ignore_mismatched_sizes=True
+        )
         
-        # Test multiple models
-        print("\n--- Testing Models ---")
+        # Create datasets
+        print("Preparing datasets...")
+        train_dataset = SentimentDataset(train_texts, train_labels, self.tokenizer)
+        val_dataset = SentimentDataset(val_texts, val_labels, self.tokenizer)
         
-        models = {
-            'Logistic Regression': LogisticRegression(
-                C=5.0,
-                solver='saga',
-                max_iter=2000,
-                class_weight='balanced',
-                random_state=random_state,
-                n_jobs=-1
-            ),
-            'Linear SVM': LinearSVC(
-                C=1.0,
-                max_iter=3000,
-                class_weight='balanced',
-                random_state=random_state
-            ),
-            'Random Forest': RandomForestClassifier(
-                n_estimators=300,
-                max_depth=50,
-                min_samples_split=2,
-                class_weight='balanced',
-                random_state=random_state,
-                n_jobs=-1
-            )
-        }
+        # Lazy import Trainer and TrainingArguments to avoid heavy TF imports at module import time
+        from transformers import Trainer, TrainingArguments
+
+        # Training arguments
+        training_args = TrainingArguments(
+            output_dir=self.model_path,
+            num_train_epochs=3,
+            per_device_train_batch_size=8,
+            per_device_eval_batch_size=8,
+            warmup_steps=100,
+            weight_decay=0.01,
+            logging_dir=os.path.join(self.model_path, 'logs'),
+            logging_steps=50,
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            load_best_model_at_end=True,
+            save_total_limit=1,
+        )
+
+        # Trainer
+        trainer = Trainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+        )
         
-        best_model = None
-        best_score = 0
-        best_name = ""
-        
-        for name, model in models.items():
-            print(f"\n{name}...")
-            model.fit(X_train_tfidf, self.y_train)
-            
-            train_score = model.score(X_train_tfidf, self.y_train)
-            test_score = model.score(X_test_tfidf, self.y_test)
-            
-            print(f"  Train: {train_score:.4f} | Test: {test_score:.4f}")
-            
-            if test_score > best_score:
-                best_score = test_score
-                best_model = model
-                best_name = name
-        
-        self.model = best_model
-        
+        # Train
         print("\n" + "="*80)
-        print(f"🏆 BEST MODEL: {best_name}")
-        print(f"   Testing Accuracy: {best_score:.4f} ({best_score*100:.2f}%)")
-        print("="*80)
+        print("TRAINING...")
+        print("="*80 + "\n")
+        trainer.train()
         
-        return self.model
-    
-    def evaluate_model(self):
-        """Evaluate model performance"""
+        # Save
+        print(f"\n✅ Saving fine-tuned model to {self.model_path}")
+        trainer.save_model(self.model_path)
+        self.tokenizer.save_pretrained(self.model_path)
+        
+        # Evaluate
         print("\n" + "="*80)
         print("EVALUATION")
         print("="*80)
-        
-        X_test_tfidf = self.vectorizer.transform(self.X_test)
-        y_pred = self.model.predict(X_test_tfidf)
-        
-        print("\n" + classification_report(self.y_test, y_pred, zero_division=0))
-        
-        # Confusion matrix
-        cm = confusion_matrix(self.y_test, y_pred, labels=['negative', 'neutral', 'positive'])
-        print("\nConfusion Matrix:")
-        print(cm)
-        
-        return cm
-    
-    def make_predictions(self, custom_texts=None):
-        """Test predictions"""
-        if custom_texts is None:
-            custom_texts = [
-                "The hospital staff was amazing and very caring. Best experience ever!",
-                "Terrible service. Long wait times and rude staff. Very disappointed.",
-                "It was okay. Nothing special but not terrible either.",
-                "The doctor was professional and the facility was clean.",
-                "Worst hospital ever! I will never come back here again!",
-                "Average experience. Could be better but could be worse."
-            ]
-        
-        print("\n" + "="*80)
-        print("TESTING PREDICTIONS")
-        print("="*80)
-        
-        for text in custom_texts:
-            result = self.predict_single(text)
-            print(f"\nText: {text}")
-            print(f"→ {result['sentiment'].upper()} ({result['confidence']:.1%})")
-    
-    def predict_single(self, text):
-        """Predict sentiment for single text"""
-        if self.model is None or self.vectorizer is None:
-            raise ValueError("Model not trained")
-        
-        cleaned = self.clean_text(text)
-        vectorized = self.vectorizer.transform([cleaned])
-        
-        prediction = self.model.predict(vectorized)[0]
-        
-        # Handle models with/without predict_proba
-        if hasattr(self.model, 'predict_proba'):
-            probabilities = self.model.predict_proba(vectorized)[0]
-            prob_dict = dict(zip(self.model.classes_, probabilities))
-            confidence = float(max(probabilities))
-        else:
-            # LinearSVC doesn't have predict_proba
-            prob_dict = {prediction: 1.0}
-            confidence = 1.0
-        
-        return {
-            'text': text,
-            'sentiment': prediction,
-            'probabilities': prob_dict,
-            'confidence': confidence
+        results = trainer.evaluate()
+        print(f"Validation Loss: {results['eval_loss']:.4f}")
+        print("="*80 + "\n")
+
+    @staticmethod
+    def get_verbose_label(score: int) -> str:
+        """Get descriptive (verbose) label for sentiment score"""
+        labels = {
+            -3: "Negative",
+            -2: "Negative",
+            -1: "Slightly Negative",
+            0: "Neutral",
+            1: "Slightly Positive",
+            2: "Positive",
+            3: "Positive"
         }
+        return labels.get(score, "Unknown")
+
+    @staticmethod
+    def get_sentiment_label(score: int) -> str:
+        """Map a score (-3..+3) to one of three condensed labels"""
+        if score < 0:
+            return "negative"
+        if score > 0:
+            return "positive"
+        return "neutral"
+
+    @staticmethod
+    def get_sentiment_emoji(score: int) -> str:
+        """Get emoji for sentiment score"""
+        emojis = {
+            -3: "😢",
+            -2: "😞",
+            -1: "😐",
+            0: "😶",
+            1: "🙂",
+            2: "😊",
+            3: "🤩"
+        }
+        return emojis.get(score, "❓")
+
+    def get_sentiment_scale(self) -> dict:
+        """Get the complete sentiment scale information"""
+        scale = {}
+        for i in range(-3, 4):
+            scale[i] = {
+                "label": self.get_sentiment_label(i),
+                "emoji": self.get_sentiment_emoji(i)
+            }
+        return scale
+
+    def analyze(self, text: str) -> dict:
+        """
+        Analyze sentiment using fine-tuned transformer
+        
+        Maps to 7-point scale: -3 (Very Negative) to +3 (Very Positive)
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Dictionary containing sentiment analysis results
+        """
+        # Tokenize input
+        inputs = self.tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512,
+            padding=True
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+        # Get prediction
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            predicted_class = probabilities.argmax(dim=-1).item()
+            model_confidence = probabilities[0][predicted_class].item()
+
+        # Get probabilities for the 3-class model (neg, neu, pos)
+        neg_prob = float(probabilities[0][0].item())
+        neu_prob = float(probabilities[0][1].item())
+        pos_prob = float(probabilities[0][2].item())
+
+        # Step 1: Check for neutral indicators (highest priority)
+        text_lower = text.lower()
+        neutral_words = ['okay', 'ok', 'fine', 'average', 'decent', 'nothing special', 
+                        'so-so', 'alright', 'fair', 'neither good nor bad', 'mixed',
+                        'acceptable', 'satisfactory', 'moderate', 'mediocre']
+        has_neutral = any(word in text_lower for word in neutral_words)
+        
+        # Step 2: Determine sentiment score
+        if has_neutral:
+            # Force neutral if neutral indicators present
+            sentiment_score = 0
+            confidence = 0.65
+        elif predicted_class == 1:
+            # Model predicted neutral
+            sentiment_score = 0
+            confidence = model_confidence
+        elif predicted_class == 0:
+            # NEGATIVE - map confidence to intensity
+            if model_confidence >= 0.99:
+                sentiment_score = -3  # Very Negative
+            elif model_confidence >= 0.95:
+                sentiment_score = -2  # Negative
+            else:
+                sentiment_score = -1  # Slightly Negative
+            confidence = model_confidence
+        else:  # predicted_class == 2
+            # POSITIVE - map confidence to intensity
+            if model_confidence >= 0.99:
+                sentiment_score = 3   # Very Positive
+            elif model_confidence >= 0.95:
+                sentiment_score = 2   # Positive
+            else:
+                sentiment_score = 1   # Slightly Positive
+            confidence = model_confidence
+
+        # Get condensed label and verbose label
+        sentiment_label = self.get_sentiment_label(sentiment_score)
+        sentiment_label_verbose = self.get_verbose_label(sentiment_score)
+        emoji = self.get_sentiment_emoji(sentiment_score)
+
+        # Create probability distribution
+        # Aggregate into three-class probabilities for the frontend
+        prob_dict = {
+            "negative": neg_prob,
+            "neutral": neu_prob,
+            "positive": pos_prob,
+        }
+
+        return {
+            "text": text,
+            "sentiment_score": sentiment_score,
+            "sentiment_label": sentiment_label,
+            "sentiment_label_verbose": sentiment_label_verbose,
+            "emoji": emoji,
+            "confidence": float(confidence),
+            "probabilities": prob_dict
+        }
+
+
+# Example usage
+if __name__ == "__main__":
+    print("="*80)
+    print("Fine-tuned Transformer Sentiment Analyzer")
+    print("Transfer Learning: Pre-trained RoBERTa + Hospital Domain Fine-tuning")
+    print("="*80 + "\n")
     
-    def save_model(self, model_dir='./saved_model'):
-        """Save model"""
-        os.makedirs(model_dir, exist_ok=True)
-        
-        with open(os.path.join(model_dir, 'sentiment_model.pkl'), 'wb') as f:
-            pickle.dump(self.model, f)
-        print(f"✅ Model saved: {model_dir}/sentiment_model.pkl")
-        
-        with open(os.path.join(model_dir, 'vectorizer.pkl'), 'wb') as f:
-            pickle.dump(self.vectorizer, f)
-        print(f"✅ Vectorizer saved: {model_dir}/vectorizer.pkl")
-    
-    def load_model(self, model_dir='./saved_model'):
-        """Load model"""
-        with open(os.path.join(model_dir, 'sentiment_model.pkl'), 'rb') as f:
-            self.model = pickle.load(f)
-        print(f"✅ Model loaded: {model_dir}/sentiment_model.pkl")
-        
-        with open(os.path.join(model_dir, 'vectorizer.pkl'), 'rb') as f:
-            self.vectorizer = pickle.load(f)
-        print(f"✅ Vectorizer loaded: {model_dir}/vectorizer.pkl")
-        
+    # Initialize (will train if needed)
+    analyzer = SentimentAnalyzer()
+
+    # Test with diverse examples
+    test_texts = [
+        "This hospital was absolutely amazing! Best care I've ever received!",
+        "The service was good and staff were friendly.",
+        "It was okay, nothing special.",
+        "Not very satisfied with the long wait times.",
+        "Terrible experience. Very disappointed with everything.",
+        "Horrible! Worst hospital ever! Never going back!",
+        "The facility was clean and staff were professional.",
+        "Average experience, nothing to complain about."
+    ]
+
+    print("="*80)
+    print("Testing Sentiment Analyzer - 7-Point Scale")
+    print("="*80 + "\n")
+
+    for text in test_texts:
+        result = analyzer.analyze(text)
+        print(f"Text: {text}")
+        print(f"Score: {result['sentiment_score']:+d} ({result['sentiment_label']}) {result['emoji']}")
+        print(f"Confidence: {result['confidence']:.1%}")
+        print("-" * 80)

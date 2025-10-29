@@ -150,7 +150,8 @@ async def get_examples():
     **Returns:**
     - Dictionary mapping sentiment levels to example reviews
     """
-    examples = {
+    # Original backend provided 7 buckets (-3..+3). Aggregate into three buckets here
+    raw = {
         "-3": [
             "This movie was absolutely terrible! Worst film I've ever seen.",
             "Complete waste of time and money. Awful in every way.",
@@ -180,6 +181,24 @@ async def get_examples():
             "Masterpiece! Incredible in every way!",
         ]
     }
+
+    # Aggregate into negative / neutral / positive
+    negative = []
+    for k in ["-3", "-2", "-1"]:
+        negative.extend(raw.get(k, []))
+
+    neutral = raw.get("0", [])
+
+    positive = []
+    for k in ["1", "2", "3"]:
+        positive.extend(raw.get(k, []))
+
+    examples = {
+        "negative": negative,
+        "neutral": neutral,
+        "positive": positive,
+    }
+
     return examples
 
 
