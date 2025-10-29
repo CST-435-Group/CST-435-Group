@@ -126,7 +126,7 @@ export default function NLPProject() {
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Enter a movie review, comment, or any text to analyze..."
+              placeholder="Enter a hospital review, patient feedback, or healthcare service comment to analyze..."
               rows={6}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
             />

@@ -73,7 +73,7 @@ async def nlp_info():
     """Get NLP project information"""
     return {
         "project": "Multi-Scale Sentiment Analysis",
-        "description": "3-point scale sentiment analyzer for movie reviews and text",
+        "description": "3-point scale sentiment analyzer for hospital reviews and healthcare feedback",
         "endpoints": {
             "/health": "Check if model is loaded",
             "/analyze": "Analyze sentiment of single text",
@@ -146,7 +146,7 @@ async def analyze_sentiment(input_data: TextInput):
     Analyze sentiment of a single text
 
     **Parameters:**
-    - text: The text to analyze (movie review, comment, etc.)
+    - text: The text to analyze (hospital review, patient feedback, etc.)
 
     **Returns:**
     - sentiment_score: Integer from 1 to 3
@@ -200,24 +200,24 @@ async def get_examples():
     """
     examples = {
         "1": [
-            "This movie was absolutely terrible! Worst film I've ever seen.",
-            "Complete waste of time and money. Awful in every way.",
-            "Very disappointing. Poor acting and weak plot.",
-            "Not good at all. Would not recommend.",
+            "Terrible experience. Very disappointed with the care I received.",
+            "Hopeless hospital. They have no value for patients or their time.",
+            "Very poor service. Long wait times and unprofessional staff.",
+            "Not good at all. Would not recommend this hospital.",
         ],
         "2": [
-            "It was okay. Nothing particularly special.",
-            "Average film. Neither good nor bad.",
-            "The movie had potential but didn't deliver.",
-            "Below average. Some moments but mostly forgettable.",
+            "It was okay. Nothing particularly special about the service.",
+            "Average hospital. Neither exceptionally good nor bad.",
+            "The service was fine but could be improved in some areas.",
+            "Decent care but the wait times could be better.",
         ],
         "3": [
-            "Pretty decent movie. I enjoyed parts of it.",
-            "Good film with some nice moments.",
-            "Really great movie! Thoroughly enjoyed it.",
-            "Excellent film with strong performances.",
-            "Absolutely amazing! Best movie I've seen this year!",
-            "Masterpiece! Incredible in every way!",
+            "Good and clean hospital. Great team of doctors and medical facilities.",
+            "Really great experience! The staff were professional and caring.",
+            "Excellent hospital with strong medical care and friendly nurses.",
+            "Over all experience was good, from reception to doctor consultation.",
+            "Absolutely amazing! Best care I've ever received at a hospital.",
+            "Outstanding service! The doctors are extremely skilled and compassionate.",
         ]
     }
     return examples
