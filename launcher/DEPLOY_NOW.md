@@ -99,21 +99,19 @@ Visit your Vercel URL and:
 
 ## What If It Still Fails?
 
-### Railway Build Fails
+### Railway Build Fails - SIMPLE FIX ✅
 
-If you still get the same error, try:
+**The EASIEST solution (recommended):**
 
-**Quick Fix - Set Root Directory:**
-1. Railway Dashboard → Settings
-2. "Root Directory" → Set to `backend`
-3. "Start Command" → Set to `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Redeploy
+1. Go to Railway Dashboard → Your Project → Settings
+2. **Root Directory**: Set to `launcher/backend` (not just `backend`)
+3. **Start Command**: Set to `uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. **Builder**: Select "Nixpacks" (NOT Dockerfile)
+5. Click "Redeploy"
 
-**Alternative - Use Dockerfile:**
-1. Railway Dashboard → Settings
-2. "Builder" → Select "Dockerfile"
-3. "Dockerfile Path" → Set to `launcher/Dockerfile`
-4. Redeploy
+This tells Railway to build from the backend directory directly, which avoids all the Docker context issues.
+
+See `RAILWAY_SIMPLE_FIX.md` for detailed explanation.
 
 ### Railway Builds But Models Don't Load
 
