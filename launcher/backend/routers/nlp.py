@@ -87,10 +87,56 @@ async def nlp_info():
 @router.get("/health")
 async def health_check():
     """Check if NLP analyzer is loaded"""
-    analyzer = load_nlp_analyzer()
     return {
-        "status": "ready" if analyzer is not None else "not_loaded",
-        "model_loaded": analyzer is not None
+        "status": "ready" if nlp_analyzer is not None else "not_loaded",
+        "model_loaded": nlp_analyzer is not None
+    }
+
+
+@router.post("/preload")
+async def preload_model():
+    """Preload the NLP model into memory"""
+    global nlp_analyzer
+
+    if nlp_analyzer is not None:
+        return {
+            "status": "already_loaded",
+            "message": "NLP model is already loaded"
+        }
+
+    print("🔄 Preloading NLP model on user request...")
+    analyzer = load_nlp_analyzer()
+
+    if analyzer is None:
+        raise HTTPException(status_code=500, detail="Failed to load NLP model")
+
+    return {
+        "status": "loaded",
+        "message": "NLP model loaded successfully"
+    }
+
+
+@router.post("/unload")
+async def unload_model():
+    """Unload the NLP model from memory"""
+    global nlp_analyzer
+
+    if nlp_analyzer is None:
+        return {
+            "status": "not_loaded",
+            "message": "NLP model was not loaded"
+        }
+
+    print("🗑️ Unloading NLP model to free memory...")
+    nlp_analyzer = None
+
+    # Force garbage collection to free memory immediately
+    import gc
+    gc.collect()
+
+    return {
+        "status": "unloaded",
+        "message": "NLP model unloaded successfully"
     }
 
 

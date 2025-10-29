@@ -112,15 +112,29 @@ def load_ann_model():
     if ann_model is not None:
         return ann_model, ann_preprocessor, ann_data
 
+    if not ANN_AVAILABLE:
+        print("❌ ANN modules not available, cannot load model")
+        return None, None, None
+
     try:
+        print(f"🔄 Attempting to load ANN model from {ann_project_path}")
+
         # Load pre-trained model if it exists
         model_path = ann_project_path / "best_model.pth"
         data_path = ann_project_path / "data" / "nba_players.csv"
 
+        print(f"📁 Checking model path: {model_path}")
+        print(f"📁 Model exists: {model_path.exists()}")
+
         if not model_path.exists():
+            print(f"❌ Model file not found at {model_path}")
             raise FileNotFoundError(f"Model not found at {model_path}")
 
+        print(f"📁 Checking data path: {data_path}")
+        print(f"📁 Data exists: {data_path.exists()}")
+
         if not data_path.exists():
+            print(f"❌ Data file not found at {data_path}")
             raise FileNotFoundError(f"Data not found at {data_path}")
 
         # Load data
@@ -134,16 +148,25 @@ def load_ann_model():
 
         # Load model
         device = get_device()
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
 
-        model = create_model(
-            input_dim=features.shape[1],
-            config={
-                'hidden_dims': [256, 128, 64, 32],
+        # Get config from checkpoint if available, otherwise use defaults
+        if 'config' in checkpoint:
+            model_config = checkpoint['config']
+            print(f"📋 Loaded config from checkpoint: {model_config}")
+        else:
+            # Fallback config - try to infer from state_dict
+            print("⚠️ No config in checkpoint, using default architecture")
+            model_config = {
+                'hidden_dims': [64, 32],  # Match the saved model architecture
                 'dropout_rate': 0.25,
                 'activation': 'relu',
                 'use_batch_norm': True
             }
+
+        model = create_model(
+            input_dim=features.shape[1],
+            config=model_config
         )
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
@@ -153,10 +176,15 @@ def load_ann_model():
         ann_data = df
 
         print("✅ ANN model loaded successfully!")
+        print(f"   - Model: {type(model).__name__}")
+        print(f"   - Data shape: {df.shape}")
+        print(f"   - Features shape: {features.shape}")
         return model, preprocessor, df
 
     except Exception as e:
-        print(f"❌ Error loading ANN model: {e}")
+        print(f"❌ Error loading ANN model: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None, None, None
 
 
@@ -185,10 +213,61 @@ async def health_check():
             "error": "ANN project files not accessible in this deployment"
         }
 
-    model, _, _ = load_ann_model()
     return {
-        "status": "ready" if model is not None else "not_loaded",
-        "model_loaded": model is not None
+        "status": "ready" if ann_model is not None else "not_loaded",
+        "model_loaded": ann_model is not None
+    }
+
+
+@router.post("/preload")
+async def preload_model():
+    """Preload the ANN model into memory"""
+    global ann_model
+
+    if not ANN_AVAILABLE:
+        raise HTTPException(status_code=503, detail="ANN project files not accessible")
+
+    if ann_model is not None:
+        return {
+            "status": "already_loaded",
+            "message": "ANN model is already loaded"
+        }
+
+    print("🔄 Preloading ANN model on user request...")
+    model, preprocessor, data = load_ann_model()
+
+    if model is None:
+        raise HTTPException(status_code=500, detail="Failed to load ANN model")
+
+    return {
+        "status": "loaded",
+        "message": "ANN model loaded successfully"
+    }
+
+
+@router.post("/unload")
+async def unload_model():
+    """Unload the ANN model from memory"""
+    global ann_model, ann_preprocessor, ann_data
+
+    if ann_model is None:
+        return {
+            "status": "not_loaded",
+            "message": "ANN model was not loaded"
+        }
+
+    print("🗑️ Unloading ANN model to free memory...")
+    ann_model = None
+    ann_preprocessor = None
+    ann_data = None
+
+    # Force garbage collection to free memory immediately
+    import gc
+    gc.collect()
+
+    return {
+        "status": "unloaded",
+        "message": "ANN model unloaded successfully"
     }
 
 
@@ -301,6 +380,7 @@ async def get_all_players(limit: int = 20):
 @router.on_event("startup")
 async def startup_event():
     """Preload model on startup"""
-    # Uncomment to preload (uses more RAM)
+    # Disabled for low RAM environments - model will load on first request
+    # Uncomment below to preload (uses more RAM but faster first request)
     # load_ann_model()
     pass

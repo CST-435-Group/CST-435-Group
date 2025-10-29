@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { nlpAPI } from '../services/api'
+import { nlpAPI, annAPI, cnnAPI } from '../services/api'
 import { MessageSquare, Send, AlertCircle, Smile } from 'lucide-react'
+import { useModelManager } from '../hooks/useModelManager'
 
 export default function NLPProject() {
   const [loading, setLoading] = useState(false)
@@ -9,6 +10,9 @@ export default function NLPProject() {
   const [result, setResult] = useState(null)
   const [examples, setExamples] = useState({})
   const [sentimentScale, setSentimentScale] = useState({})
+
+  // Preload NLP model and unload others when this page loads
+  useModelManager(nlpAPI, [annAPI, cnnAPI])
 
   useEffect(() => {
     loadExamples()

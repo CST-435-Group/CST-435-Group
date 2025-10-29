@@ -19,6 +19,8 @@ export const annAPI = {
   getDataInfo: () => api.get('/ann/data-info'),
   selectTeam: (data) => api.post('/ann/select-team', data),
   getPlayers: (limit = 20) => api.get(`/ann/players?limit=${limit}`),
+  preload: () => api.post('/ann/preload'),
+  unload: () => api.post('/ann/unload'),
 }
 
 // CNN API calls
@@ -35,6 +37,8 @@ export const cnnAPI = {
     })
   },
   predictBase64: (imageBase64) => api.post('/cnn/predict-base64', { image_base64: imageBase64 }),
+  preload: () => api.post('/cnn/preload'),
+  unload: () => api.post('/cnn/unload'),
 }
 
 // NLP API calls
@@ -45,6 +49,8 @@ export const nlpAPI = {
   analyzeBatch: (texts) => api.post('/nlp/analyze/batch', { texts }),
   getExamples: () => api.get('/nlp/examples'),
   getSentimentScale: () => api.get('/nlp/sentiment-scale'),
+  preload: () => api.post('/nlp/preload'),
+  unload: () => api.post('/nlp/unload'),
 }
 
 // General API calls

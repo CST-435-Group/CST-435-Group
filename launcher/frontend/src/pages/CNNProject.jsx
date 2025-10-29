@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { cnnAPI } from '../services/api'
+import { cnnAPI, annAPI, nlpAPI } from '../services/api'
 import { Camera, Upload, AlertCircle, CheckCircle } from 'lucide-react'
+import { useModelManager } from '../hooks/useModelManager'
 
 export default function CNNProject() {
   const [loading, setLoading] = useState(false)
@@ -10,6 +11,9 @@ export default function CNNProject() {
   const [prediction, setPrediction] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
+
+  // Preload CNN model and unload others when this page loads
+  useModelManager(cnnAPI, [annAPI, nlpAPI])
 
   useEffect(() => {
     loadModelInfo()

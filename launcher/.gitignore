@@ -39,19 +39,19 @@ yarn-error.log*
 htmlcov/
 .pytest_cache/
 
-# Models (too large for git)
-*.pth
-*.pkl
-*.h5
-*.onnx
+# Models (too large for git) - commented out because models are tracked in parent projects
+# *.pth
+# *.pkl
+# *.h5
+# *.onnx
 
-# Data files
-*.csv
-*.json
-preprocessed_images/
-data/
-models/
-saved_model/
+# Data files - commented out because data is tracked in parent projects
+# *.csv
+# *.json
+# preprocessed_images/
+# data/
+# models/
+# saved_model/
 
 # Dockerfile backups
 Dockerfile.backup

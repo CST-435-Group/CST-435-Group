@@ -151,8 +151,8 @@ def load_cnn_model():
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
 
-        # Load model
-        checkpoint = torch.load(model_path, map_location='cpu')
+        # Load model (weights_only=False needed for PyTorch 2.6+ compatibility)
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
 
         model = FruitCNN(num_classes=metadata['num_classes'])
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -188,10 +188,57 @@ async def cnn_info():
 @router.get("/health")
 async def health_check():
     """Check if CNN model is loaded"""
-    model, _ = load_cnn_model()
     return {
-        "status": "ready" if model is not None else "not_loaded",
-        "model_loaded": model is not None
+        "status": "ready" if cnn_model is not None else "not_loaded",
+        "model_loaded": cnn_model is not None
+    }
+
+
+@router.post("/preload")
+async def preload_model():
+    """Preload the CNN model into memory"""
+    global cnn_model
+
+    if cnn_model is not None:
+        return {
+            "status": "already_loaded",
+            "message": "CNN model is already loaded"
+        }
+
+    print("🔄 Preloading CNN model on user request...")
+    model, metadata = load_cnn_model()
+
+    if model is None:
+        raise HTTPException(status_code=500, detail="Failed to load CNN model")
+
+    return {
+        "status": "loaded",
+        "message": "CNN model loaded successfully"
+    }
+
+
+@router.post("/unload")
+async def unload_model():
+    """Unload the CNN model from memory"""
+    global cnn_model, cnn_metadata
+
+    if cnn_model is None:
+        return {
+            "status": "not_loaded",
+            "message": "CNN model was not loaded"
+        }
+
+    print("🗑️ Unloading CNN model to free memory...")
+    cnn_model = None
+    cnn_metadata = None
+
+    # Force garbage collection to free memory immediately
+    import gc
+    gc.collect()
+
+    return {
+        "status": "unloaded",
+        "message": "CNN model unloaded successfully"
     }
 
 
