@@ -1,0 +1,27 @@
+# Root-level requirements.txt for Railway deployment
+# This file helps Nixpacks detect that this is a Python project
+# The actual requirements are in launcher/backend/requirements.txt
+
+# FastAPI and server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+python-multipart==0.0.6
+
+# PyTorch (CPU version for Railway)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Transformers for NLP
+transformers>=4.30.0
+
+# Data processing
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.2.0
+Pillow>=9.5.0
+
+# Utilities
+tqdm>=4.65.0
+python-dotenv>=1.0.0
