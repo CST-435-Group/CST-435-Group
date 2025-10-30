@@ -58,8 +58,11 @@ def load_rnn_generator():
 
         generator = TextGenerator()
 
-        # Try to load default model
+        # Try to load default model (excluding broken models)
         model_files = list(MODEL_DIR.glob("model*.pt"))
+        # Filter out non-functioning models
+        model_files = [f for f in model_files if f.stem.lower() not in ['best_model', 'model_best']]
+
         if model_files:
             # Find corresponding tokenizer and config
             model_path = model_files[0]
@@ -372,7 +375,10 @@ async def test_model(use_beam_search: bool = True, beam_width: int = 5):
 
 @router.get("/models/available")
 async def list_available_models():
-    """List all available models"""
+    """List all available models (excluding broken models)"""
+    # List of model names to exclude (broken/non-functioning models)
+    excluded_models = ['best_model', 'model_best']
+
     generator = load_rnn_generator()
 
     if generator is None:
@@ -383,6 +389,9 @@ async def list_available_models():
 
             for model_file in model_dir.glob("*.pt"):
                 model_name = model_file.stem
+                # Skip excluded models
+                if model_name.lower() in excluded_models:
+                    continue
                 models.append({
                     "name": model_name,
                     "display_name": model_name.replace('_', ' ').title()
@@ -402,6 +411,9 @@ async def list_available_models():
 
         for model_file in model_dir.glob("*.pt"):
             model_name = model_file.stem
+            # Skip excluded models
+            if model_name.lower() in excluded_models:
+                continue
             models.append({
                 "name": model_name,
                 "display_name": model_name.replace('_', ' ').title()
