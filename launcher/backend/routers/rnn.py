@@ -4,10 +4,13 @@ Wraps existing RNN backend functionality with lazy loading
 """
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 import sys
 from pathlib import Path
+import json
+import asyncio
 
 # Add RNN project to path
 rnn_project_path = Path(__file__).parent.parent.parent.parent / "rnn-text-generator" / "backend" / "app"
@@ -222,6 +225,89 @@ async def generate_text(request: GenerateRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating text: {str(e)}")
+
+
+@router.post("/generate/stream")
+async def generate_text_stream(request: GenerateRequest):
+    """Generate text with streaming - sends each word as it's generated"""
+    generator = load_rnn_generator()
+
+    if generator is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    async def stream_generator():
+        """Async generator that yields words as they're generated"""
+        import torch
+        import numpy as np
+
+        try:
+            # Send initial metadata
+            yield f"data: {json.dumps({'type': 'start', 'seed_text': request.seed_text})}\n\n"
+
+            # Use sampling method (beam search is harder to stream)
+            generator.model.eval()
+            generated_text = request.seed_text.lower()
+
+            with torch.no_grad():
+                for word_idx in range(request.num_words):
+                    # Tokenize current text
+                    token_list = generator.tokenizer.texts_to_sequences([generated_text])[0]
+
+                    # Take last sequence_length tokens
+                    token_list = token_list[-(generator.sequence_length):]
+
+                    # Pad to model input size
+                    if len(token_list) < generator.max_sequence_len - 1:
+                        token_list = [0] * (generator.max_sequence_len - 1 - len(token_list)) + token_list
+                    else:
+                        token_list = token_list[-(generator.max_sequence_len - 1):]
+
+                    # Convert to tensor
+                    token_tensor = torch.LongTensor([token_list]).to(generator.device)
+
+                    # Predict next word probabilities
+                    output = generator.model(token_tensor)
+                    predicted_probs = torch.softmax(output / request.temperature, dim=-1)
+                    predicted_probs = predicted_probs.cpu().numpy()[0]
+
+                    # Sample from distribution
+                    predicted_index = np.random.choice(
+                        len(predicted_probs),
+                        p=predicted_probs
+                    )
+
+                    # Convert index to word
+                    if predicted_index in generator.tokenizer.idx_to_word:
+                        word = generator.tokenizer.idx_to_word[predicted_index]
+                        if word != '<PAD>':
+                            # Smart punctuation: don't add space before contraction suffixes
+                            if word in ('s', 't', 'd', 'll', 're', 've', 'm') and generated_text and not generated_text.endswith("'"):
+                                word_to_send = "'" + word
+                                generated_text += "'" + word
+                            else:
+                                word_to_send = " " + word
+                                generated_text += " " + word
+
+                            # Send the word
+                            yield f"data: {json.dumps({'type': 'token', 'word': word_to_send, 'index': word_idx})}\n\n"
+
+                            # Small delay to prevent overwhelming the client
+                            await asyncio.sleep(0.01)
+
+            # Send completion message
+            yield f"data: {json.dumps({'type': 'done', 'full_text': generated_text})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @router.get("/model/test")

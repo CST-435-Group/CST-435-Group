@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || '/api'
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 300000, // 5 minutes for long-running operations
   headers: {
     'Content-Type': 'application/json',
   },
@@ -59,6 +59,52 @@ export const rnnAPI = {
   getHealth: () => api.get('/rnn/health'),
   getModelInfo: () => api.get('/rnn/model/info'),
   generateText: (data) => api.post('/rnn/generate', data),
+  generateTextStream: async (data, onToken, onComplete, onError) => {
+    const url = `${API_URL}/rnn/generate/stream`
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonData = JSON.parse(line.slice(6))
+
+            if (jsonData.type === 'token') {
+              onToken(jsonData.word, jsonData.index)
+            } else if (jsonData.type === 'done') {
+              onComplete(jsonData.full_text)
+            } else if (jsonData.type === 'error') {
+              onError(jsonData.message)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      onError(error.message)
+    }
+  },
   testModel: (useBeamSearch = true, beamWidth = 5) =>
     api.get(`/rnn/model/test?use_beam_search=${useBeamSearch}&beam_width=${beamWidth}`),
   getAvailableModels: () => api.get('/rnn/models/available'),

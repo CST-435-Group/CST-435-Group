@@ -108,25 +108,50 @@ export default function RNNProject() {
 
     setLoading(true)
     setError(null)
+    setGeneratedText(seedText) // Start with seed text
 
-    try {
-      const response = await rnnAPI.generateText({
-        seed_text: seedText,
-        num_words: numWords,
-        temperature: temperature,
-        use_beam_search: useBeamSearch,
-        beam_width: beamWidth,
-        length_penalty: lengthPenalty,
-        repetition_penalty: repetitionPenalty,
-        beam_temperature: 0.0,
-        add_punctuation: false,
-        validate_grammar: false
-      })
-      setGeneratedText(response.data.generated_text)
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Error generating text')
-    } finally {
-      setLoading(false)
+    const requestData = {
+      seed_text: seedText,
+      num_words: numWords,
+      temperature: temperature,
+      use_beam_search: useBeamSearch,
+      beam_width: beamWidth,
+      length_penalty: lengthPenalty,
+      repetition_penalty: repetitionPenalty,
+      beam_temperature: 0.0,
+      add_punctuation: false,
+      validate_grammar: false
+    }
+
+    // Use streaming for sampling, regular API for beam search (harder to stream)
+    if (useBeamSearch) {
+      try {
+        const response = await rnnAPI.generateText(requestData)
+        setGeneratedText(response.data.generated_text)
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Error generating text')
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // Use streaming for sampling
+      await rnnAPI.generateTextStream(
+        requestData,
+        // onToken: called for each word
+        (word) => {
+          setGeneratedText(prev => prev + word)
+        },
+        // onComplete: called when done
+        (fullText) => {
+          setGeneratedText(fullText)
+          setLoading(false)
+        },
+        // onError: called on error
+        (errorMsg) => {
+          setError(errorMsg)
+          setLoading(false)
+        }
+      )
     }
   }
 
