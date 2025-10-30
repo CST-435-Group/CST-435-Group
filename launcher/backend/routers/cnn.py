@@ -161,11 +161,11 @@ def load_cnn_model():
         cnn_model = model
         cnn_metadata = metadata
 
-        print("✅ CNN model loaded successfully!")
+        print("[OK] CNN model loaded successfully!")
         return model, metadata
 
     except Exception as e:
-        print(f"❌ Error loading CNN model: {e}")
+        print(f"[ERROR] Error loading CNN model: {e}")
         return None, None
 
 
@@ -205,7 +205,7 @@ async def preload_model():
             "message": "CNN model is already loaded"
         }
 
-    print("🔄 Preloading CNN model on user request...")
+    print("[LOADING] Preloading CNN model on user request...")
     model, metadata = load_cnn_model()
 
     if model is None:
@@ -228,7 +228,7 @@ async def unload_model():
             "message": "CNN model was not loaded"
         }
 
-    print("🗑️ Unloading CNN model to free memory...")
+    print("[UNLOADING] Unloading CNN model to free memory...")
     cnn_model = None
     cnn_metadata = None
 

@@ -60,11 +60,11 @@ def load_nlp_analyzer():
 
         analyzer = SentimentAnalyzer()
         nlp_analyzer = analyzer
-        print("✅ NLP sentiment analyzer loaded successfully!")
+        print("[OK] NLP sentiment analyzer loaded successfully!")
         return analyzer
 
     except Exception as e:
-        print(f"❌ Error loading NLP analyzer: {e}")
+        print(f"[ERROR] Error loading NLP analyzer: {e}")
         return None
 
 
@@ -104,7 +104,7 @@ async def preload_model():
             "message": "NLP model is already loaded"
         }
 
-    print("🔄 Preloading NLP model on user request...")
+    print("[LOADING] Preloading NLP model on user request...")
     analyzer = load_nlp_analyzer()
 
     if analyzer is None:
@@ -127,7 +127,7 @@ async def unload_model():
             "message": "NLP model was not loaded"
         }
 
-    print("🗑️ Unloading NLP model to free memory...")
+    print("[UNLOADING] Unloading NLP model to free memory...")
     nlp_analyzer = None
 
     # Force garbage collection to free memory immediately

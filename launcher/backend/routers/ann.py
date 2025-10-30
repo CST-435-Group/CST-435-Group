@@ -28,11 +28,11 @@ try:
         if resolved.exists():
             ann_project_path = resolved
             sys.path.insert(0, str(ann_project_path))
-            print(f"✅ Found ANN_Project at: {ann_project_path}")
+            print(f"[OK] Found ANN_Project at: {ann_project_path}")
             break
 
     if ann_project_path is None:
-        print("❌ ANN_Project not found in any of these locations:")
+        print("[ERROR] ANN_Project not found in any of these locations:")
         for p in possible_paths:
             print(f"   - {p.resolve()}")
         raise ImportError("ANN_Project directory not accessible")
@@ -46,7 +46,7 @@ try:
 
     ANN_AVAILABLE = True
 except Exception as e:
-    print(f"❌ Failed to import ANN modules: {e}")
+    print(f"[ERROR] Failed to import ANN modules: {e}")
     ANN_AVAILABLE = False
     # Create dummy objects so the router can still load
     create_model = None
@@ -113,28 +113,28 @@ def load_ann_model():
         return ann_model, ann_preprocessor, ann_data
 
     if not ANN_AVAILABLE:
-        print("❌ ANN modules not available, cannot load model")
+        print("[ERROR] ANN modules not available, cannot load model")
         return None, None, None
 
     try:
-        print(f"🔄 Attempting to load ANN model from {ann_project_path}")
+        print(f"[LOADING] Attempting to load ANN model from {ann_project_path}")
 
         # Load pre-trained model if it exists
         model_path = ann_project_path / "best_model.pth"
         data_path = ann_project_path / "data" / "nba_players.csv"
 
-        print(f"📁 Checking model path: {model_path}")
-        print(f"📁 Model exists: {model_path.exists()}")
+        print(f"[INFO] Checking model path: {model_path}")
+        print(f"[INFO] Model exists: {model_path.exists()}")
 
         if not model_path.exists():
-            print(f"❌ Model file not found at {model_path}")
+            print(f"[ERROR] Model file not found at {model_path}")
             raise FileNotFoundError(f"Model not found at {model_path}")
 
-        print(f"📁 Checking data path: {data_path}")
-        print(f"📁 Data exists: {data_path.exists()}")
+        print(f"[INFO] Checking data path: {data_path}")
+        print(f"[INFO] Data exists: {data_path.exists()}")
 
         if not data_path.exists():
-            print(f"❌ Data file not found at {data_path}")
+            print(f"[ERROR] Data file not found at {data_path}")
             raise FileNotFoundError(f"Data not found at {data_path}")
 
         # Load data
@@ -153,10 +153,10 @@ def load_ann_model():
         # Get config from checkpoint if available, otherwise use defaults
         if 'config' in checkpoint:
             model_config = checkpoint['config']
-            print(f"📋 Loaded config from checkpoint: {model_config}")
+            print(f"[INFO] Loaded config from checkpoint: {model_config}")
         else:
             # Fallback config - try to infer from state_dict
-            print("⚠️ No config in checkpoint, using default architecture")
+            print("[WARNING] No config in checkpoint, using default architecture")
             model_config = {
                 'hidden_dims': [64, 32],  # Match the saved model architecture
                 'dropout_rate': 0.25,
@@ -175,14 +175,14 @@ def load_ann_model():
         ann_preprocessor = preprocessor
         ann_data = df
 
-        print("✅ ANN model loaded successfully!")
+        print("[OK] ANN model loaded successfully!")
         print(f"   - Model: {type(model).__name__}")
         print(f"   - Data shape: {df.shape}")
         print(f"   - Features shape: {features.shape}")
         return model, preprocessor, df
 
     except Exception as e:
-        print(f"❌ Error loading ANN model: {type(e).__name__}: {e}")
+        print(f"[ERROR] Error loading ANN model: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
         return None, None, None
@@ -233,7 +233,7 @@ async def preload_model():
             "message": "ANN model is already loaded"
         }
 
-    print("🔄 Preloading ANN model on user request...")
+    print("[LOADING] Preloading ANN model on user request...")
     model, preprocessor, data = load_ann_model()
 
     if model is None:
@@ -256,7 +256,7 @@ async def unload_model():
             "message": "ANN model was not loaded"
         }
 
-    print("🗑️ Unloading ANN model to free memory...")
+    print("[UNLOADING] Unloading ANN model to free memory...")
     ann_model = None
     ann_preprocessor = None
     ann_data = None

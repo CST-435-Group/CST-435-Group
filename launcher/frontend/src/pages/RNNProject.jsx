@@ -14,6 +14,8 @@ export default function RNNProject() {
   const [beamWidth, setBeamWidth] = useState(5)
   const [lengthPenalty, setLengthPenalty] = useState(1.0)
   const [repetitionPenalty, setRepetitionPenalty] = useState(1.2)
+  const [addPunctuation, setAddPunctuation] = useState(false)
+  const [validateGrammar, setValidateGrammar] = useState(false)
   const [generatedText, setGeneratedText] = useState(null)
   const [modelInfo, setModelInfo] = useState(null)
   const [activeTab, setActiveTab] = useState('generate') // 'generate' or 'report'
@@ -119,11 +121,11 @@ export default function RNNProject() {
       length_penalty: lengthPenalty,
       repetition_penalty: repetitionPenalty,
       beam_temperature: 0.0,
-      add_punctuation: false,
-      validate_grammar: false
+      add_punctuation: addPunctuation,
+      validate_grammar: validateGrammar
     }
 
-    // Use streaming for sampling, regular API for beam search (harder to stream)
+    // Use regular API for beam search, streaming for sampling
     if (useBeamSearch) {
       try {
         const response = await rnnAPI.generateText(requestData)
@@ -134,12 +136,16 @@ export default function RNNProject() {
         setLoading(false)
       }
     } else {
-      // Use streaming for sampling
+      // Use streaming for sampling (supports grammar & punctuation)
       await rnnAPI.generateTextStream(
         requestData,
         // onToken: called for each word
-        (word) => {
+        (word, index, grammarScore) => {
           setGeneratedText(prev => prev + word)
+        },
+        // onPunctuation: called when punctuation is applied
+        (formattedText) => {
+          setGeneratedText(formattedText)
         },
         // onComplete: called when done
         (fullText) => {
@@ -394,6 +400,43 @@ export default function RNNProject() {
                 </div>
               </>
             )}
+
+            {/* Post-Processing Options */}
+            <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Post-Processing Options</h3>
+
+              <div className="space-y-2">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={addPunctuation}
+                    onChange={(e) => setAddPunctuation(e.target.checked)}
+                    className="mr-3 h-4 w-4 text-green-600 rounded focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    <span className="font-semibold">Add Punctuation & Capitalization</span>
+                    <span className="block text-xs text-gray-500 mt-1">
+                      Automatically add periods, capitalize sentences, and format contractions
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={validateGrammar}
+                    onChange={(e) => setValidateGrammar(e.target.checked)}
+                    className="mr-3 h-4 w-4 text-green-600 rounded focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    <span className="font-semibold">Validate Grammar</span>
+                    <span className="block text-xs text-gray-500 mt-1">
+                      Check for basic grammar rules during generation (slower but more grammatical)
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
 
             <button
               onClick={handleGenerate}

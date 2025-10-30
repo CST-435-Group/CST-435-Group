@@ -59,7 +59,7 @@ export const rnnAPI = {
   getHealth: () => api.get('/rnn/health'),
   getModelInfo: () => api.get('/rnn/model/info'),
   generateText: (data) => api.post('/rnn/generate', data),
-  generateTextStream: async (data, onToken, onComplete, onError) => {
+  generateTextStream: async (data, onToken, onPunctuation, onComplete, onError) => {
     const url = `${API_URL}/rnn/generate/stream`
     try {
       const response = await fetch(url, {
@@ -92,7 +92,9 @@ export const rnnAPI = {
             const jsonData = JSON.parse(line.slice(6))
 
             if (jsonData.type === 'token') {
-              onToken(jsonData.word, jsonData.index)
+              onToken(jsonData.word, jsonData.index, jsonData.grammar_score)
+            } else if (jsonData.type === 'punctuation') {
+              onPunctuation(jsonData.formatted_text)
             } else if (jsonData.type === 'done') {
               onComplete(jsonData.full_text)
             } else if (jsonData.type === 'error') {

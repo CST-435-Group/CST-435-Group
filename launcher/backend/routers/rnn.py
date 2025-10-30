@@ -79,14 +79,14 @@ def load_rnn_generator():
                 generator.load_model(str(model_path), str(tokenizer_path))
                 rnn_generator = generator
                 current_model_name = model_name
-                print(f"✅ RNN text generator loaded successfully with model: {model_name}")
+                print(f"[OK] RNN text generator loaded successfully with model: {model_name}")
                 return generator
 
-        print("⚠️ No RNN model found. Please train a model first.")
+        print("[WARNING] No RNN model found. Please train a model first.")
         return None
 
     except Exception as e:
-        print(f"❌ Error loading RNN generator: {e}")
+        print(f"[ERROR] Error loading RNN generator: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -130,7 +130,7 @@ async def preload_model():
             "message": "RNN model is already loaded"
         }
 
-    print("🔄 Preloading RNN model on user request...")
+    print("[LOADING] Preloading RNN model on user request...")
     generator = load_rnn_generator()
 
     if generator is None:
@@ -153,7 +153,7 @@ async def unload_model():
             "message": "RNN model was not loaded"
         }
 
-    print("🗑️ Unloading RNN model to free memory...")
+    print("[UNLOADING] Unloading RNN model to free memory...")
     rnn_generator = None
 
     # Force garbage collection to free memory immediately
@@ -247,6 +247,14 @@ async def generate_text_stream(request: GenerateRequest):
             # Send initial metadata
             yield f"data: {json.dumps({'type': 'start', 'seed_text': request.seed_text})}\n\n"
 
+            # Initialize grammar validator if requested
+            grammar_validator = None
+            if request.validate_grammar:
+                from text_generator import get_grammar_validator
+                grammar_validator = get_grammar_validator()
+                if grammar_validator:
+                    print("[INFO] Grammar validation enabled for streaming")
+
             # Use sampling method (beam search is harder to stream)
             generator.model.eval()
             generated_text = request.seed_text.lower()
@@ -273,34 +281,67 @@ async def generate_text_stream(request: GenerateRequest):
                     predicted_probs = torch.softmax(output / request.temperature, dim=-1)
                     predicted_probs = predicted_probs.cpu().numpy()[0]
 
-                    # Sample from distribution
-                    predicted_index = np.random.choice(
-                        len(predicted_probs),
-                        p=predicted_probs
-                    )
+                    # Try multiple samples if grammar validation is enabled
+                    max_attempts = 10 if grammar_validator else 1
+                    word_accepted = False
 
-                    # Convert index to word
-                    if predicted_index in generator.tokenizer.idx_to_word:
-                        word = generator.tokenizer.idx_to_word[predicted_index]
-                        if word != '<PAD>':
-                            # Smart punctuation: don't add space before contraction suffixes
-                            if word in ('s', 't', 'd', 'll', 're', 've', 'm') and generated_text and not generated_text.endswith("'"):
-                                word_to_send = "'" + word
-                                generated_text += "'" + word
-                            else:
-                                word_to_send = " " + word
-                                generated_text += " " + word
+                    for attempt in range(max_attempts):
+                        # Sample from distribution
+                        predicted_index = np.random.choice(
+                            len(predicted_probs),
+                            p=predicted_probs
+                        )
 
-                            # Send the word
-                            yield f"data: {json.dumps({'type': 'token', 'word': word_to_send, 'index': word_idx})}\n\n"
+                        # Convert index to word
+                        if predicted_index in generator.tokenizer.idx_to_word:
+                            word = generator.tokenizer.idx_to_word[predicted_index]
+                            if word != '<PAD>':
+                                # Create test text with new word
+                                if word in ('s', 't', 'd', 'll', 're', 've', 'm') and generated_text and not generated_text.endswith("'"):
+                                    test_word = "'" + word
+                                else:
+                                    test_word = " " + word
 
-                            # Small delay to prevent overwhelming the client
-                            await asyncio.sleep(0.01)
+                                test_text = generated_text + test_word
+
+                                # Validate grammar if enabled
+                                if grammar_validator:
+                                    is_valid, score = grammar_validator.validate_sequence(test_text, partial=True)
+                                    if not is_valid and attempt < max_attempts - 1:
+                                        # Try another word
+                                        continue
+
+                                # Word accepted
+                                generated_text = test_text
+                                word_accepted = True
+
+                                # Send the word
+                                yield f"data: {json.dumps({'type': 'token', 'word': test_word, 'index': word_idx, 'grammar_score': score if grammar_validator else 1.0})}\n\n"
+
+                                # Small delay to prevent overwhelming the client
+                                await asyncio.sleep(0.01)
+                                break
+
+                    if not word_accepted:
+                        # If no word was accepted after max attempts, skip this position
+                        continue
+
+            # Apply punctuation post-processing if requested
+            if request.add_punctuation:
+                from text_generator import add_punctuation_postprocess
+                print("[INFO] Applying punctuation post-processing...")
+                formatted_text = add_punctuation_postprocess(generated_text)
+
+                # Send punctuation update
+                yield f"data: {json.dumps({'type': 'punctuation', 'formatted_text': formatted_text})}\n\n"
+                generated_text = formatted_text
 
             # Send completion message
             yield f"data: {json.dumps({'type': 'done', 'full_text': generated_text})}\n\n"
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return StreamingResponse(

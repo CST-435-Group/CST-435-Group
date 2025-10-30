@@ -7,7 +7,16 @@
       "Bash(git push:*)",
       "Bash(git pull:*)",
       "Bash(git stash:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git fetch:*)",
+      "Bash(git log:*)",
+      "Bash(python:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "Bash(pip install:*)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m pip install -r requirements.txt)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m uvicorn:*)",
+      "Bash(timeout /t 3)"
     ],
     "deny": [],
     "ask": []
