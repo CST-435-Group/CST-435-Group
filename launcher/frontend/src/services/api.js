@@ -62,7 +62,7 @@ export const rnnAPI = {
   testModel: (useBeamSearch = true, beamWidth = 5) =>
     api.get(`/rnn/model/test?use_beam_search=${useBeamSearch}&beam_width=${beamWidth}`),
   getAvailableModels: () => api.get('/rnn/models/available'),
-  switchModel: (modelName) => api.post('/rnn/models/switch', { model_name: modelName }),
+  switchModel: (data) => api.post('/rnn/models/switch', data),
   getTechnicalReport: () => api.get('/rnn/technical-report'),
   preload: () => api.post('/rnn/preload'),
   unload: () => api.post('/rnn/unload'),

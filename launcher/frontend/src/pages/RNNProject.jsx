@@ -19,20 +19,63 @@ export default function RNNProject() {
   const [activeTab, setActiveTab] = useState('generate') // 'generate' or 'report'
   const [technicalReport, setTechnicalReport] = useState('')
   const [loadingReport, setLoadingReport] = useState(false)
+  const [availableModels, setAvailableModels] = useState([])
+  const [selectedModel, setSelectedModel] = useState(null)
+  const [switchingModel, setSwitchingModel] = useState(false)
+  const [modelSwitchMessage, setModelSwitchMessage] = useState(null)
 
   // Preload RNN model and unload others when this page loads
   useModelManager(rnnAPI, [annAPI, cnnAPI, nlpAPI])
 
   useEffect(() => {
     loadModelInfo()
+    loadAvailableModels()
   }, [])
 
   const loadModelInfo = async () => {
     try {
       const response = await rnnAPI.getModelInfo()
       setModelInfo(response.data)
+      if (response.data.current_model) {
+        setSelectedModel(response.data.current_model)
+      }
     } catch (err) {
       console.error('Error loading model info:', err)
+    }
+  }
+
+  const loadAvailableModels = async () => {
+    try {
+      const response = await rnnAPI.getAvailableModels()
+      setAvailableModels(response.data.models || [])
+      if (response.data.current_model) {
+        setSelectedModel(response.data.current_model)
+      }
+    } catch (err) {
+      console.error('Error loading available models:', err)
+    }
+  }
+
+  const handleModelSwitch = async (modelName) => {
+    if (modelName === selectedModel) return
+
+    setSwitchingModel(true)
+    setModelSwitchMessage(null)
+    setError(null)
+
+    try {
+      const response = await rnnAPI.switchModel({ model_name: modelName })
+      setSelectedModel(modelName)
+      setModelSwitchMessage({ type: 'success', text: response.data.message })
+
+      // Reload model info after switching
+      await loadModelInfo()
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || 'Error switching model'
+      setError(errorMsg)
+      setModelSwitchMessage({ type: 'error', text: errorMsg })
+    } finally {
+      setSwitchingModel(false)
     }
   }
 
@@ -113,6 +156,40 @@ export default function RNNProject() {
             <p className="text-gray-600 text-lg">LSTM-Based Neural Network for Next-Word Prediction</p>
           </div>
         </div>
+
+        {/* Model Selection */}
+        {availableModels.length > 0 && (
+          <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-semibold text-gray-700">Select Model:</label>
+                <select
+                  value={selectedModel || ''}
+                  onChange={(e) => handleModelSwitch(e.target.value)}
+                  disabled={switchingModel}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  {availableModels.map((model) => (
+                    <option key={model.name} value={model.name}>
+                      {model.display_name}
+                    </option>
+                  ))}
+                </select>
+                {switchingModel && (
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    <span className="text-sm">Switching...</span>
+                  </div>
+                )}
+              </div>
+              {modelSwitchMessage && (
+                <div className={`text-sm font-medium ${modelSwitchMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                  {modelSwitchMessage.text}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Model Info */}
         {modelInfo && (

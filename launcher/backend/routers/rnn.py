@@ -41,7 +41,7 @@ MODEL_DIR = None
 
 def load_rnn_generator():
     """Lazy load RNN text generator"""
-    global rnn_generator, MODEL_DIR
+    global rnn_generator, MODEL_DIR, current_model_name
 
     if rnn_generator is not None:
         return rnn_generator
@@ -72,6 +72,7 @@ def load_rnn_generator():
             if model_path.exists() and tokenizer_path.exists():
                 generator.load_model(str(model_path), str(tokenizer_path))
                 rnn_generator = generator
+                current_model_name = model_name
                 print(f"✅ RNN text generator loaded successfully with model: {model_name}")
                 return generator
 
@@ -177,7 +178,8 @@ async def get_model_info():
             "embedding_dim": generator.embedding_dim,
             "lstm_units": generator.lstm_units,
             "num_layers": generator.num_layers,
-            "total_neurons": total_neurons
+            "total_neurons": total_neurons,
+            "current_model": current_model_name
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting model info: {str(e)}")
