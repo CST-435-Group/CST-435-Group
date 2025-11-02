@@ -353,16 +353,16 @@ export default function RNNProject() {
                 </label>
                 <input
                   type="range"
-                  min="0.5"
-                  max="1.5"
+                  min="0.1"
+                  max="5.0"
                   step="0.1"
                   value={temperature}
                   onChange={(e) => setTemperature(parseFloat(e.target.value))}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>Conservative</span>
-                  <span>Creative</span>
+                  <span>Very Conservative (0.1)</span>
+                  <span>Extremely Creative (5.0)</span>
                 </div>
               </div>
             )}

@@ -282,7 +282,7 @@ async def generate_text_stream(request: GenerateRequest):
                     predicted_probs = predicted_probs.cpu().numpy()[0]
 
                     # Try multiple samples if grammar validation is enabled
-                    max_attempts = 10 if grammar_validator else 1
+                    max_attempts = 50 if grammar_validator else 1
                     word_accepted = False
 
                     for attempt in range(max_attempts):

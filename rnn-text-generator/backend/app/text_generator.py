@@ -117,7 +117,7 @@ class GrammarValidator:
                     score *= 0.8
 
             # Final validation: score above threshold
-            is_valid = score >= 0.4  # Threshold for acceptability
+            is_valid = score >= 0.9  # Threshold for acceptability (very strict grammar)
 
             return is_valid, score
 

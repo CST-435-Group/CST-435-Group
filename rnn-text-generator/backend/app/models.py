@@ -8,7 +8,7 @@ class GenerateRequest(BaseModel):
     """Request model for text generation."""
     seed_text: str = Field(..., min_length=1, description="Starting text")
     num_words: int = Field(50, ge=10, le=200, description="Number of words to generate")
-    temperature: float = Field(1.0, ge=0.1, le=2.0, description="Sampling temperature (ignored if use_beam_search=True)")
+    temperature: float = Field(1.0, ge=0.1, le=5.0, description="Sampling temperature (ignored if use_beam_search=True)")
     use_beam_search: bool = Field(False, description="Use beam search instead of sampling")
     beam_width: int = Field(5, ge=1, le=10, description="Number of beams for beam search")
     length_penalty: float = Field(1.0, ge=0.1, le=2.0, description="Length penalty for beam search")
