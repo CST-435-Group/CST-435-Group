@@ -10,11 +10,25 @@ import pickle
 import re
 import json
 from typing import List, Tuple, Dict, Optional
-import matplotlib.pyplot as plt
-import seaborn as sns
 from collections import Counter
 import time
-from tqdm import tqdm
+
+# Optional imports for visualization (not needed for API)
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    PLOTTING_AVAILABLE = True
+except ImportError:
+    PLOTTING_AVAILABLE = False
+    plt = None
+    sns = None
+
+# Optional import for progress bars
+try:
+    from tqdm import tqdm
+except ImportError:
+    # Fallback to simple range if tqdm not available
+    tqdm = lambda x, **kwargs: x
 
 # Global variables to cache models (loaded on first use)
 _punctuation_model = None
@@ -1027,6 +1041,10 @@ class TextGenerator:
         1. Loss over epochs
         2. Accuracy over epochs
         """
+        if not PLOTTING_AVAILABLE:
+            print("[WARNING] matplotlib not available, skipping training history plot")
+            return
+
         if self.history is None:
             raise ValueError("No training history available!")
 
