@@ -1,0 +1,21 @@
+{
+  "project": "cnn",
+  "chosen_instance": "g4dn.xlarge",
+  "median_inference_s": 0.005550849999963248,
+  "instance_throughput_per_sec": 504.42724988398874,
+  "monthly_capacity": 1307475431.6992989,
+  "cost_per_inference": 2.896574503949076e-07,
+  "model_size_gb": 0.0,
+  "training_cost": 10.0,
+  "storage_cost": 0.0,
+  "cost_10000_per_day": 378.98,
+  "instances_10000_per_day": 1,
+  "cost_100000_per_day": 381.29,
+  "instances_100000_per_day": 1,
+  "cost_1000000_per_day": 404.47,
+  "instances_1000000_per_day": 1,
+  "monthly_inference_cost": 378.72,
+  "monthly_data_transfer_cost": 0.26,
+  "monthly_misc": 0.0,
+  "total_over_deployment": 388.98
+}

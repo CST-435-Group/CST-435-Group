@@ -123,3 +123,10 @@ export const generalAPI = {
 }
 
 export default api
+
+// Docs API
+export const docsAPI = {
+  getTechnical: (projectId) => api.get(`/docs/${projectId}/technical`),
+  getCost: (projectId) => api.get(`/docs/${projectId}/cost`),
+  getCostJson: (projectId) => api.get(`/docs/${projectId}/cost/json`),
+}

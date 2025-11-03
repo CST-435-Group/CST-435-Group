@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { annAPI, cnnAPI, nlpAPI } from '../services/api'
+import { annAPI, cnnAPI, nlpAPI, docsAPI } from '../services/api'
+import ReactMarkdown from 'react-markdown'
 import { Brain, Users, TrendingUp, AlertCircle } from 'lucide-react'
 import { useModelManager } from '../hooks/useModelManager'
 
@@ -197,6 +198,48 @@ export default function ANNProject() {
           </div>
         </div>
       )}
+
+      {/* Reports Tabs */}
+      <div className="bg-white rounded-2xl shadow-xl p-8 mt-8">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Reports</h2>
+
+        <ReportTabs projectId="ann" />
+      </div>
+    </div>
+  )
+}
+
+
+function ReportTabs({ projectId }) {
+  const [active, setActive] = useState('technical')
+  const [techMd, setTechMd] = useState(null)
+
+  useEffect(() => {
+    // load technical by default
+    loadTechnical()
+  }, [])
+
+  const loadTechnical = async () => {
+    try {
+      const res = await docsAPI.getTechnical(projectId)
+      setTechMd(res.data.markdown)
+      setActive('technical')
+    } catch (err) {
+      setTechMd('# Technical Report\n\nNot available')
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex space-x-2 mb-4">
+        <button onClick={loadTechnical} className={`px-4 py-2 rounded ${active === 'technical' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+          Technical Report
+        </button>
+      </div>
+
+      <div className="prose max-w-none">
+        {active === 'technical' && techMd && <ReactMarkdown>{techMd}</ReactMarkdown>}
+      </div>
     </div>
   )
 }

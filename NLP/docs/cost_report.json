@@ -1,0 +1,21 @@
+{
+  "project": "nlp",
+  "chosen_instance": "t3.medium",
+  "median_inference_s": 0.022993000000496977,
+  "instance_throughput_per_sec": 60.88809637584221,
+  "monthly_capacity": 157821945.806183,
+  "cost_per_inference": 1.8978349206759411e-07,
+  "model_size_gb": 0.0,
+  "training_cost": 10.0,
+  "storage_cost": 0.0,
+  "cost_10000_per_day": 30.21,
+  "instances_10000_per_day": 1,
+  "cost_100000_per_day": 32.53,
+  "instances_100000_per_day": 1,
+  "cost_1000000_per_day": 55.7,
+  "instances_1000000_per_day": 1,
+  "monthly_inference_cost": 29.95,
+  "monthly_data_transfer_cost": 0.26,
+  "monthly_misc": 0.0,
+  "total_over_deployment": 40.21
+}

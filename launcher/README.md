@@ -300,3 +300,22 @@ This project was developed for CST-435 Neural Networks course.
 ## License
 
 Educational use only - CST-435 Course Project
+
+## Generating per-project cost JSON files
+
+This repo includes a helper script that writes `docs/cost_report.json` for each project using the `cost_analysis` utilities.
+
+From the repo root run (PowerShell):
+
+```powershell
+# generate for all known projects
+python .\tools\generate_cost_reports.py --all
+
+# generate only ANN and CNN
+python .\tools\generate_cost_reports.py --projects ann cnn
+
+# generate using the phased breakdown (Phase 1 / Phase 2)
+python .\tools\generate_cost_reports.py --all --use-phased
+```
+
+The script will create `docs/` directories when needed and write `cost_report.json` with the computed values. The backend docs router prefers these files if present.

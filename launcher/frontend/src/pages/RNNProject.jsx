@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { rnnAPI, annAPI, cnnAPI, nlpAPI } from '../services/api'
+import { rnnAPI, annAPI, cnnAPI, nlpAPI, docsAPI } from '../services/api'
 import { MessageCircle, Send, AlertCircle, Sparkles, BookOpen, FileText } from 'lucide-react'
 import { useModelManager } from '../hooks/useModelManager'
 import ReactMarkdown from 'react-markdown'
@@ -21,6 +21,7 @@ export default function RNNProject() {
   const [activeTab, setActiveTab] = useState('generate') // 'generate' or 'report'
   const [technicalReport, setTechnicalReport] = useState('')
   const [loadingReport, setLoadingReport] = useState(false)
+  const [reportTabActive, setReportTabActive] = useState('technical')
   const [availableModels, setAvailableModels] = useState([])
   const [selectedModel, setSelectedModel] = useState(null)
   const [switchingModel, setSwitchingModel] = useState(false)
@@ -101,6 +102,7 @@ export default function RNNProject() {
       loadTechnicalReport()
     }
   }, [activeTab])
+
 
   const handleGenerate = async () => {
     if (!seedText.trim()) {
@@ -504,24 +506,26 @@ export default function RNNProject() {
         </div>
       )}
 
-      {/* Technical Report Tab */}
+      {/* Reports (Technical / Cost) Tab */}
       {activeTab === 'report' && (
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          {loadingReport ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-600 mt-4">Loading technical report...</p>
-            </div>
-          ) : technicalReport ? (
-            <div className="prose prose-lg max-w-none">
-              <ReactMarkdown>{technicalReport}</ReactMarkdown>
-            </div>
-          ) : (
-            <div className="text-center text-gray-500 py-12">
-              <FileText size={64} className="mx-auto mb-4 opacity-50" />
-              <p>Technical report not available</p>
-            </div>
-          )}
+          <div>
+            {loadingReport ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-600 mt-4">Loading technical report...</p>
+              </div>
+            ) : technicalReport ? (
+              <div className="prose prose-lg max-w-none">
+                <ReactMarkdown>{technicalReport}</ReactMarkdown>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 py-12">
+                <FileText size={64} className="mx-auto mb-4 opacity-50" />
+                <p>Technical report not available</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
