@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.next/
+out/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation and reports (not needed in runtime)
+docs/
+*.md
+!README.md
+
+# Backup directories
+*_backup/
+launcher_backup/
+
+# Training scripts and notebooks (not needed in production)
+**/train.py
+**/training.py
+**/*.ipynb
+
+# Large datasets (should use minimal data in production)
+*/datasets/
+*/data/raw/
+*/data/processed/
+
+# Logs
+*.log
+logs/
