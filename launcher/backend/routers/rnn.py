@@ -29,9 +29,31 @@ try:
         SwitchModelRequest,
         SwitchModelResponse
     )
-except ImportError:
-    print("Warning: Could not import RNN model. RNN endpoints will not work.")
+except ImportError as e:
+    print(f"Warning: Could not import RNN model. RNN endpoints will not work. Error: {e}")
     TextGenerator = None
+
+    # Define fallback models so endpoints don't crash
+    class GenerateRequest(BaseModel):
+        seed_text: str = Field(..., description="Starting text for generation")
+        num_words: int = Field(50, description="Number of words to generate")
+        temperature: float = Field(1.0, description="Sampling temperature")
+        use_beam_search: bool = Field(False, description="Use beam search")
+        beam_width: int = Field(5, description="Beam width for beam search")
+        length_penalty: float = Field(1.0, description="Length penalty")
+        repetition_penalty: float = Field(1.0, description="Repetition penalty")
+        beam_temperature: float = Field(1.0, description="Beam temperature")
+        add_punctuation: bool = Field(False, description="Add punctuation")
+        validate_grammar: bool = Field(False, description="Validate grammar")
+
+    GenerateResponse = dict
+    ModelInfo = dict
+    HealthResponse = dict
+    TestMetrics = dict
+    AvailableModel = dict
+    AvailableModelsResponse = dict
+    SwitchModelRequest = dict
+    SwitchModelResponse = dict
 
 # Create router
 router = APIRouter()

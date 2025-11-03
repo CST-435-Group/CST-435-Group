@@ -7,13 +7,21 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import json
 import os
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 import pickle
+
+# Optional plotting imports (not needed for API)
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    PLOTTING_AVAILABLE = True
+except ImportError:
+    PLOTTING_AVAILABLE = False
+    plt = None
+    sns = None
 
 def ensure_directories():
     """Create necessary directories if they don't exist."""
@@ -134,11 +142,15 @@ def load_config(filepath: str = 'config.json') -> Dict:
 def plot_player_distribution(df: pd.DataFrame, save_path: str = 'outputs/player_distribution.png'):
     """
     Plot distribution of player statistics.
-    
+
     Args:
         df: Player data DataFrame
         save_path: Path to save plot
     """
+    if not PLOTTING_AVAILABLE:
+        print("Warning: matplotlib not available, skipping plot")
+        return
+
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
     
     # Points distribution
@@ -188,17 +200,21 @@ def plot_player_distribution(df: pd.DataFrame, save_path: str = 'outputs/player_
     plt.show()
     print(f"Player distribution plot saved to {save_path}")
 
-def plot_correlation_matrix(df: pd.DataFrame, 
+def plot_correlation_matrix(df: pd.DataFrame,
                            features: List[str],
                            save_path: str = 'outputs/correlation_matrix.png'):
     """
     Plot correlation matrix of features.
-    
+
     Args:
         df: DataFrame with features
         features: List of feature columns
         save_path: Path to save plot
     """
+    if not PLOTTING_AVAILABLE:
+        print("Warning: matplotlib not available, skipping plot")
+        return
+
     plt.figure(figsize=(12, 10))
     
     # Calculate correlation matrix
