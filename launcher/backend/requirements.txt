@@ -6,7 +6,7 @@ python-multipart==0.0.6
 
 # PyTorch (CPU version for Railway) - pinned for faster builds
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.1.0
+torch==2.5.1+cpu
 
 # Transformers for NLP - pinned versions
 transformers==4.35.0
