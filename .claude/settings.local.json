@@ -16,7 +16,12 @@
       "Bash(pip install:*)",
       "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m pip install -r requirements.txt)",
       "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m uvicorn:*)",
-      "Bash(timeout /t 3)"
+      "Bash(timeout /t 3)",
+      "Bash(npm start)",
+      "Bash(timeout /t 5)",
+      "Bash(npm run:*)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
