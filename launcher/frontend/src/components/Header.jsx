@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Brain, Camera, MessageSquare, MessageCircle } from 'lucide-react'
+import { Home, Brain, Camera, MessageSquare, MessageCircle, Dna } from 'lucide-react'
 
 export default function Header() {
   const location = useLocation()
@@ -75,6 +75,18 @@ export default function Header() {
             >
               <MessageCircle size={20} />
               <span>RNN</span>
+            </Link>
+
+            <Link
+              to="/ga"
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
+                isActive('/ga')
+                  ? 'bg-blue-100 text-blue-700 font-semibold'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Dna size={20} />
+              <span>GA</span>
             </Link>
           </nav>
         </div>

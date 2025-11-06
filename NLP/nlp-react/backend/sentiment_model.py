@@ -81,19 +81,19 @@ class SentimentAnalyzer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Debug: Print resolved paths
-        print(f"📁 Data path resolved to: {self.data_path}")
-        print(f"📁 Model path resolved to: {self.model_path}")
-        print(f"📁 Data file exists: {os.path.exists(self.data_path)}")
+        print(f"[DATA] Data path resolved to: {self.data_path}")
+        print(f"[DATA] Model path resolved to: {self.model_path}")
+        print(f"[DATA] Data file exists: {os.path.exists(self.data_path)}")
 
         # Check if fine-tuned model exists
         if os.path.exists(os.path.join(self.model_path, 'pytorch_model.bin')) or \
            os.path.exists(os.path.join(self.model_path, 'model.safetensors')):
-            print(f"✅ Loading fine-tuned model from {self.model_path}")
+            print(f"[OK] Loading fine-tuned model from {self.model_path}")
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
             self.model = AutoModelForSequenceClassification.from_pretrained(self.model_path)
         elif use_pretrained_only:
             # Use pre-trained model directly without fine-tuning
-            print(f"✅ Using pre-trained model: {self.model_name} (no fine-tuning)")
+            print(f"[OK] Using pre-trained model: {self.model_name} (no fine-tuning)")
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
             self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
         else:
@@ -102,14 +102,14 @@ class SentimentAnalyzer:
             try:
                 self._train_model()
             except Exception as e:
-                print(f"⚠️ Fine-tuning failed: {e}")
-                print(f"✅ Falling back to pre-trained model: {self.model_name}")
+                print(f"[WARN] Fine-tuning failed: {e}")
+                print(f"[OK] Falling back to pre-trained model: {self.model_name}")
                 self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
                 self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
 
         self.model.to(self.device)
         self.model.eval()
-        print(f"✅ Model ready on device: {self.device}\n")
+        print(f"[OK] Model ready on device: {self.device}\n")
 
     def _train_model(self):
         """Fine-tune the model on hospital data"""
@@ -189,9 +189,9 @@ class SentimentAnalyzer:
         print("TRAINING...")
         print("="*80 + "\n")
         trainer.train()
-        
+
         # Save
-        print(f"\n✅ Saving fine-tuned model to {self.model_path}")
+        print(f"\n[OK] Saving fine-tuned model to {self.model_path}")
         trainer.save_model(self.model_path)
         self.tokenizer.save_pretrained(self.model_path)
         

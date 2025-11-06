@@ -9,6 +9,7 @@ const ANNProject = lazy(() => import('./pages/ANNProject'))
 const CNNProject = lazy(() => import('./pages/CNNProject'))
 const NLPProject = lazy(() => import('./pages/NLPProject'))
 const RNNProject = lazy(() => import('./pages/RNNProject'))
+const GAProject = lazy(() => import('./pages/GAProject'))
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
             <Route path="/cnn" element={<CNNProject />} />
             <Route path="/nlp" element={<NLPProject />} />
             <Route path="/rnn" element={<RNNProject />} />
+            <Route path="/ga" element={<GAProject />} />
           </Routes>
         </Suspense>
       </div>
