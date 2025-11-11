@@ -30,8 +30,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import routers
-from routers import ann, cnn, nlp, rnn, docs
+# Import routers - support running from both root and backend directory
+try:
+    from routers import ann, cnn, nlp, rnn, docs
+except ImportError:
+    from launcher.backend.routers import ann, cnn, nlp, rnn, docs
 
 # Include routers with prefixes
 app.include_router(ann.router, prefix="/api/ann", tags=["ANN - NBA Team Selection"])
