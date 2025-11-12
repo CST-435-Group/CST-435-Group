@@ -4,6 +4,12 @@ Academic approach: Transfer learning + domain-specific fine-tuning
 Properly handles: Very Negative, Negative, Neutral, Positive, Very Positive
 """
 
+# Force transformers to use PyTorch only (disable TensorFlow)
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
+os.environ['USE_TF'] = '0'  # Disable TensorFlow in transformers
+os.environ['USE_TORCH'] = '1'  # Enable PyTorch in transformers
+
 import torch
 from transformers import (
     AutoTokenizer,
@@ -12,7 +18,6 @@ from transformers import (
 from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
-import os
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')

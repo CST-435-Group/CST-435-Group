@@ -3,6 +3,12 @@ FastAPI Router for NLP Project (Sentiment Analysis)
 Wraps existing NLP backend functionality
 """
 
+# Force transformers to use PyTorch only (disable TensorFlow) - must be set before any imports
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
+os.environ['USE_TF'] = '0'  # Disable TensorFlow in transformers
+os.environ['USE_TORCH'] = '1'  # Enable PyTorch in transformers
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict
