@@ -298,7 +298,49 @@ During retraining, monitor these metrics to verify improvements:
   const SectionIcon = sections.find(s => s.id === activeSection)?.icon || BookOpen
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <>
+      {/* ADD THIS ENTIRE STYLE BLOCK HERE - RIGHT AFTER THE RETURN */}
+      <style>{`
+        @media print {
+          @page {
+            size: letter;
+            margin: 0.75in;
+          }
+          
+          body * {
+            visibility: hidden;
+          }
+          
+          #print-content, #print-content * {
+            visibility: visible;
+          }
+          
+          #print-content {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          
+          button, .no-print {
+            display: none !important;
+          }
+          
+          code {
+            background: #f3f4f6 !important;
+            border: 1px solid #d1d5db !important;
+            page-break-inside: avoid;
+          }
+          
+          pre {
+            background: #f9fafb !important;
+            border: 2px solid #e5e7eb !important;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
+
+    <div className="container mx-auto px-4 py-8" id="print-content">
       {/* Header */}
       <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
         <div className="flex items-center mb-4">
@@ -336,7 +378,7 @@ During retraining, monitor these metrics to verify improvements:
       </div>
 
       {/* Navigation Tabs */}
-      <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden no-print">
         <div className="flex overflow-x-auto">
           {sections.map((section) => {
             const Icon = section.icon
@@ -358,17 +400,54 @@ During retraining, monitor these metrics to verify improvements:
         </div>
       </div>
 
-      {/* Content Area */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <div className="flex items-center mb-6">
-          <SectionIcon size={32} className="text-blue-600 mr-3" />
-          <h2 className="text-3xl font-bold text-gray-800">
-            {sections.find(s => s.id === activeSection)?.label}
-          </h2>
-        </div>
+      {/* Content Area - Screen View */}
+    <div className="bg-white rounded-2xl shadow-xl p-8 no-print">
+    <div className="flex items-center mb-6">
+        <SectionIcon size={32} className="text-blue-600 mr-3" />
+        <h2 className="text-3xl font-bold text-gray-800">
+        {sections.find(s => s.id === activeSection)?.label}
+        </h2>
+    </div>
 
+    <div className="prose prose-lg max-w-none">
+        <ReactMarkdown
+        components={{
+            h1: ({node, ...props}) => <h1 className="text-3xl font-bold text-gray-800 mb-4 mt-8" {...props} />,
+            h2: ({node, ...props}) => <h2 className="text-2xl font-bold text-gray-800 mb-3 mt-6" {...props} />,
+            h3: ({node, ...props}) => <h3 className="text-xl font-bold text-gray-700 mb-2 mt-4" {...props} />,
+            p: ({node, ...props}) => <p className="text-gray-700 mb-4 leading-relaxed" {...props} />,
+            ul: ({node, ...props}) => <ul className="list-disc list-inside mb-4 text-gray-700" {...props} />,
+            ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-4 text-gray-700" {...props} />,
+            li: ({node, ...props}) => <li className="mb-2" {...props} />,
+            pre: ({node, ...props}) => (
+            <pre className="bg-gray-50 border-2 border-blue-300 p-6 rounded-xl overflow-x-auto my-6 shadow-lg" {...props} />
+            ),
+            code: ({node, inline, ...props}) => 
+            inline ? (
+                <code className="bg-blue-100 px-2 py-1 rounded text-sm font-mono text-blue-700 font-semibold border border-blue-300" {...props} />
+            ) : (
+                <code className="block text-gray-800 text-base font-mono" {...props} />
+            ),
+            strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props} />,
+            hr: ({node, ...props}) => <hr className="my-8 border-t-2 border-gray-200" {...props} />,
+        }}
+        >
+        {markdownContent[activeSection]}
+        </ReactMarkdown>
+    </div>
+    </div>
+
+    {/* Full Report for Printing - Hidden on screen, shows when printing */}
+    <div className="hidden print:block">
+    <div className="mb-8">
+        <h1 className="text-4xl font-bold text-gray-800 mb-2">CNN Optimization Report</h1>
+        <p className="text-gray-600 text-lg mb-8">Addressing 99% False Positive Rate Through Systematic Improvements</p>
+    </div>
+
+    {sections.map((section) => (
+        <div key={section.id} className="mb-12">
         <div className="prose prose-lg max-w-none">
-          <ReactMarkdown
+            <ReactMarkdown
             components={{
                 h1: ({node, ...props}) => <h1 className="text-3xl font-bold text-gray-800 mb-4 mt-8" {...props} />,
                 h2: ({node, ...props}) => <h2 className="text-2xl font-bold text-gray-800 mb-3 mt-6" {...props} />,
@@ -378,41 +457,36 @@ During retraining, monitor these metrics to verify improvements:
                 ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-4 text-gray-700" {...props} />,
                 li: ({node, ...props}) => <li className="mb-2" {...props} />,
                 pre: ({node, ...props}) => (
-                <pre className="bg-gray-50 border-2 border-blue-300 p-6 rounded-xl overflow-x-auto my-6 shadow-lg" {...props} />
+                <pre className="bg-gray-50 border-2 border-gray-300 p-4 rounded-lg overflow-x-auto my-4" {...props} />
                 ),
                 code: ({node, inline, ...props}) => 
                 inline ? (
-                    <code className="bg-blue-100 px-2 py-1 rounded text-sm font-mono text-blue-700 font-semibold border border-blue-300" {...props} />
+                    <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-gray-800 font-semibold border border-gray-300" {...props} />
                 ) : (
-                    <code className="block text-gray-800 text-base font-mono" {...props} />
+                    <code className="block text-gray-800 text-sm font-mono" {...props} />
                 ),
                 strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props} />,
-                hr: ({node, ...props}) => <hr className="my-8 border-t-2 border-gray-200" {...props} />,
+                hr: ({node, ...props}) => <hr className="my-6 border-t-2 border-gray-300" {...props} />,
             }}
             >
-            {markdownContent[activeSection]}
-        </ReactMarkdown>
+            {markdownContent[section.id]}
+            </ReactMarkdown>
         </div>
-      </div>
+        {section.id !== 'references' && <div className="page-break-after" />}
+        </div>
+    ))}
+    </div>
 
-      {/* Download Section */}
-      {/* Download Button */}
-    <div className="mt-8 text-center">
+    {/* Download Button */}
+    <div className="mt-8 text-center no-print">
     <button 
-        onClick={() => {
-        const element = document.createElement('a')
-        const file = new Blob([JSON.stringify(markdownContent, null, 2)], {type: 'application/json'})
-        element.href = URL.createObjectURL(file)
-        element.download = 'cnn-optimization-report.json'
-        document.body.appendChild(element)
-        element.click()
-        document.body.removeChild(element)
-        }}
-        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-colors"
+        onClick={() => window.print()}
+        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-colors shadow-lg hover:shadow-xl"
     >
-        Download Report
+        Print Full Report as PDF
     </button>
     </div>
     </div>
+  </>
   )
 }
