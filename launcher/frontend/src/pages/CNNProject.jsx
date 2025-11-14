@@ -3,6 +3,8 @@ import { cnnAPI, annAPI, nlpAPI, docsAPI } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import { Camera, Upload, AlertCircle, CheckCircle } from 'lucide-react'
 import { useModelManager } from '../hooks/useModelManager'
+import OptimizationReport from '../components/optimizationReport.jsx'
+
 
 export default function CNNProject() {
   const [loading, setLoading] = useState(false)
@@ -252,17 +254,27 @@ function ReportTabs({ projectId }) {
   }
 
   return (
-    <div>
-      <div className="flex space-x-2 mb-4">
-        <button onClick={loadTechnical} className={`px-4 py-2 rounded ${active === 'technical' ? 'bg-green-600 text-white' : 'bg-gray-100'}`}>
-          Technical Report
-        </button>
-      </div>
+      <div>
+        <div className="flex space-x-2 mb-4">
+          <button 
+            onClick={loadTechnical} 
+            className={`px-4 py-2 rounded ${active === 'technical' ? 'bg-green-600 text-white' : 'bg-gray-100'}`}
+          >
+            Technical Report
+          </button>
+          <button 
+            onClick={() => setActive('optimization')} 
+            className={`px-4 py-2 rounded ${active === 'optimization' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+          >
+            Optimization Report
+          </button>
+        </div>
 
-      <div className="prose max-w-none">
-        {active === 'technical' && techMd && <ReactMarkdown>{techMd}</ReactMarkdown>}
+        <div className="prose max-w-none">
+          {active === 'technical' && techMd && <ReactMarkdown>{techMd}</ReactMarkdown>}
+          {active === 'optimization' && <OptimizationReport />}
+        </div>
       </div>
-    </div>
-  )
-}
+    )
+  }
 
