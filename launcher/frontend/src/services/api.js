@@ -37,6 +37,9 @@ export const cnnAPI = {
     })
   },
   predictBase64: (imageBase64) => api.post('/cnn/predict-base64', { image_base64: imageBase64 }),
+  getSampleImages: (perFruit = 5) => api.get(`/cnn/sample-images?per_fruit=${perFruit}`),
+  getSampleImageUrl: (fruit, filename) => `${API_URL}/cnn/sample-image/${fruit}/${filename}`,
+  predictSampleImage: (fruit, filename) => api.post(`/cnn/predict-sample/${fruit}/${filename}`),
   preload: () => api.post('/cnn/preload'),
   unload: () => api.post('/cnn/unload'),
 }

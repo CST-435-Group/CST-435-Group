@@ -36,9 +36,9 @@ print("\n[STEP 1] Downloading Fruits dataset from Kaggle...")
 try:
     import kagglehub
     path = kagglehub.dataset_download("moltean/fruits")
-    print(f"✅ Dataset downloaded to: {path}")
+    print(f"[OK] Dataset downloaded to: {path}")
 except Exception as e:
-    print(f"❌ Error downloading dataset: {e}")
+    print(f"[ERROR] Error downloading dataset: {e}")
     sys.exit(1)
 
 # --------------------------
@@ -69,10 +69,10 @@ else:
                 break
 
 if training_folder is None:
-    print("❌ Could not find Training folder")
+    print("[ERROR] Could not find Training folder")
     sys.exit(1)
 
-print(f"✅ Found training folder: {training_folder}")
+print(f"[OK] Found training folder: {training_folder}")
 
 # Get all fruit categories (immediate subdirectories)
 fruit_folders = [f for f in training_folder.iterdir() if f.is_dir()]
@@ -115,7 +115,7 @@ for fruit_folder in tqdm(fruit_folders, desc="Scanning fruits"):
 # Sort by count
 sorted_fruits = sorted(fruit_counts.items(), key=lambda x: x[1], reverse=True)
 
-print("\n📊 Top 20 fruits by image count:")
+print("\n[STATS] Top 20 fruits by image count:")
 for i, (fruit, count) in enumerate(sorted_fruits[:20], 1):
     print(f"  {i:2d}. {fruit:30s}: {count:5d} images")
 
@@ -132,10 +132,10 @@ for fruit, count in sorted_fruits:
         SELECTED_FRUITS.append(fruit)
 
 if len(SELECTED_FRUITS) < 5:
-    print("⚠️  Not enough fruits with 500+ images. Using top 5...")
+    print("[WARNING] Not enough fruits with 500+ images. Using top 5...")
     SELECTED_FRUITS = [fruit for fruit, _ in sorted_fruits[:5]]
 
-print("\n🎯 Selected fruits for classification:")
+print("\n[SELECTED] Selected fruits for classification:")
 for i, fruit in enumerate(SELECTED_FRUITS, 1):
     count = fruit_counts.get(fruit, 0)
     print(f"  {i}. {fruit:30s}: {count} images")
@@ -209,12 +209,12 @@ for fruit_idx, base_fruit_name in enumerate(SELECTED_FRUITS):
             labels.append(fruit_idx)
             successful += 1
     
-    print(f"  ✅ Successfully processed {successful} images")
+    print(f"  [OK] Successfully processed {successful} images")
 
-print(f"\n✅ Total images processed: {len(image_paths)}")
+print(f"\n[OK] Total images processed: {len(image_paths)}")
 
 if len(image_paths) < 100:
-    print("\n❌ Not enough images processed.")
+    print("\n[ERROR] Not enough images processed.")
     sys.exit(1)
 
 # Save metadata
@@ -228,7 +228,7 @@ metadata = {
 with open('data/dataset_metadata.json', 'w') as f:
     json.dump(metadata, f, indent=2)
 
-print("✅ Saved dataset metadata")
+print("[OK] Saved dataset metadata")
 
 # --------------------------
 # STEP 5: Create PyTorch Dataset
@@ -283,7 +283,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, nu
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
-print("✅ DataLoaders created")
+print("[OK] DataLoaders created")
 
 # --------------------------
 # STEP 6: Define CNN Model
@@ -340,13 +340,13 @@ print(f"Total parameters: {total_params:,}")
 print("\n[STEP 7] Setting up training...")
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.AdamW(model.parameters(), lr=0.0005, weight_decay=0.01)
 # Note: verbose parameter removed (not supported in all PyTorch versions)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3)
 
-print("✅ Loss: CrossEntropyLoss")
-print("✅ Optimizer: Adam (lr=0.001)")
-print("✅ Scheduler: ReduceLROnPlateau")
+print("[OK] Loss: CrossEntropyLoss")
+print("[OK] Optimizer: AdamW (lr=0.0005, weight_decay=0.01)")
+print("[OK] Scheduler: ReduceLROnPlateau")
 
 # --------------------------
 # STEP 8: Training Loop
@@ -429,7 +429,7 @@ for epoch in range(num_epochs):
             'fruit_names': SELECTED_FRUITS,
             'num_classes': len(SELECTED_FRUITS)
         }, 'models/best_model.pth')
-        print(f"  💾 Saved best model (val_acc: {val_acc*100:.2f}%)")
+        print(f"  [SAVED] Saved best model (val_acc: {val_acc*100:.2f}%)")
 
 print("\n" + "=" * 70)
 print("TRAINING COMPLETE!")
@@ -467,12 +467,12 @@ with torch.no_grad():
 test_loss = test_loss / len(test_dataset)
 test_acc = correct / total
 
-print(f"\n📊 Final Test Results:")
+print(f"\n[RESULTS] Final Test Results:")
 print(f"  Test Loss: {test_loss:.4f}")
 print(f"  Test Accuracy: {test_acc*100:.2f}%")
 
 from sklearn.metrics import classification_report
-print(f"\n📊 Per-Class Performance:")
+print(f"\n[RESULTS] Per-Class Performance:")
 print(classification_report(all_labels, all_preds, target_names=SELECTED_FRUITS))
 
 with open('models/training_history.json', 'w') as f:
@@ -492,6 +492,6 @@ final_metadata = {
 with open('models/model_metadata.json', 'w') as f:
     json.dump(final_metadata, f, indent=2)
 
-print("\n✅ All files saved!")
-print("\n🎉 Training complete! Ready for Streamlit deployment!")
+print("\n[OK] All files saved!")
+print("\n[COMPLETE] Training complete! Ready for Streamlit deployment!")
 print("Run: streamlit run streamlit_app.py")

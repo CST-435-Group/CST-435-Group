@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { cnnAPI, annAPI, nlpAPI, docsAPI } from '../services/api'
 import ReactMarkdown from 'react-markdown'
-import { Camera, Upload, AlertCircle, CheckCircle } from 'lucide-react'
+import { Camera, Upload, AlertCircle, CheckCircle, Image as ImageIcon } from 'lucide-react'
 import { useModelManager } from '../hooks/useModelManager'
 import OptimizationReport from '../components/optimizationReport.jsx'
 
@@ -14,6 +14,9 @@ export default function CNNProject() {
   const [prediction, setPrediction] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
+  const [uploadMode, setUploadMode] = useState('upload') // 'upload' or 'dataset'
+  const [sampleImages, setSampleImages] = useState([])
+  const [selectedSampleImage, setSelectedSampleImage] = useState(null)
 
   // Preload CNN model and unload others when this page loads
   useModelManager(cnnAPI, [annAPI, nlpAPI])
@@ -21,6 +24,7 @@ export default function CNNProject() {
   useEffect(() => {
     loadModelInfo()
     loadFruits()
+    loadSampleImages()
   }, [])
 
   const loadModelInfo = async () => {
@@ -38,6 +42,15 @@ export default function CNNProject() {
       setFruits(response.data.fruits)
     } catch (err) {
       console.error('Error loading fruits:', err)
+    }
+  }
+
+  const loadSampleImages = async () => {
+    try {
+      const response = await cnnAPI.getSampleImages(5)
+      setSampleImages(response.data)
+    } catch (err) {
+      console.error('Error loading sample images:', err)
     }
   }
 
@@ -68,6 +81,32 @@ export default function CNNProject() {
 
     try {
       const response = await cnnAPI.predictImage(selectedFile)
+      setPrediction(response.data)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error classifying image')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSampleImageSelect = (sampleImage) => {
+    setSelectedSampleImage(sampleImage)
+    setPrediction(null)
+    setError(null)
+  }
+
+  const handlePredictSample = async () => {
+    if (!selectedSampleImage) {
+      setError('Please select an image from the dataset first')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const [fruit, filename] = selectedSampleImage.id.split('/')
+      const response = await cnnAPI.predictSampleImage(fruit, filename)
       setPrediction(response.data)
     } catch (err) {
       setError(err.response?.data?.detail || 'Error classifying image')
@@ -117,44 +156,149 @@ export default function CNNProject() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Upload Section */}
+        {/* Upload/Browse Section */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-            <Upload className="mr-3 text-green-600" />
-            Upload Image
-          </h2>
-
-          <div className="mb-6">
-            <label className="block text-gray-700 font-semibold mb-2">Select Fruit Image</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
+          {/* Tab Switcher */}
+          <div className="flex mb-6 border-b border-gray-200">
+            <button
+              onClick={() => {
+                setUploadMode('upload')
+                setPrediction(null)
+                setError(null)
+                setSelectedSampleImage(null)
+              }}
+              className={`flex-1 py-3 px-4 font-semibold transition-colors ${
+                uploadMode === 'upload'
+                  ? 'text-green-600 border-b-2 border-green-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Upload className="inline mr-2" size={20} />
+              Upload Image
+            </button>
+            <button
+              onClick={() => {
+                setUploadMode('dataset')
+                setPrediction(null)
+                setError(null)
+                setSelectedFile(null)
+                setPreviewUrl(null)
+              }}
+              className={`flex-1 py-3 px-4 font-semibold transition-colors ${
+                uploadMode === 'dataset'
+                  ? 'text-green-600 border-b-2 border-green-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <ImageIcon className="inline mr-2" size={20} />
+              Browse Dataset
+            </button>
           </div>
 
-          {/* Image Preview */}
-          {previewUrl && (
-            <div className="mb-6">
-              <p className="text-gray-700 font-semibold mb-2">Preview</p>
-              <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
-                <img
-                  src={previewUrl}
-                  alt="Preview"
-                  className="max-w-full h-auto max-h-64 mx-auto rounded"
+          {/* Upload Mode */}
+          {uploadMode === 'upload' && (
+            <div>
+              <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-2">Select Fruit Image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
+
+              {/* Image Preview */}
+              {previewUrl && (
+                <div className="mb-6">
+                  <p className="text-gray-700 font-semibold mb-2">Preview</p>
+                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
+                    <img
+                      src={previewUrl}
+                      alt="Preview"
+                      className="max-w-full h-auto max-h-64 mx-auto rounded"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handlePredict}
+                disabled={loading || !selectedFile}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Classifying...' : 'Classify Image'}
+              </button>
             </div>
           )}
 
-          <button
-            onClick={handlePredict}
-            disabled={loading || !selectedFile}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Classifying...' : 'Classify Image'}
-          </button>
+          {/* Dataset Browse Mode */}
+          {uploadMode === 'dataset' && (
+            <div>
+              <p className="text-gray-700 font-semibold mb-4">Select an image from the dataset</p>
+
+              {/* Sample Images Grid */}
+              <div className="max-h-96 overflow-y-auto mb-6">
+                {fruits.map((fruit) => (
+                  <div key={fruit} className="mb-6">
+                    <h4 className="text-lg font-bold text-gray-800 mb-3">{fruit}</h4>
+                    <div className="grid grid-cols-5 gap-2">
+                      {sampleImages
+                        .filter((img) => img.fruit === fruit)
+                        .map((sampleImage) => {
+                          const [fruitDir, filename] = sampleImage.id.split('/')
+                          const imageUrl = cnnAPI.getSampleImageUrl(fruitDir, filename)
+                          const isSelected = selectedSampleImage?.id === sampleImage.id
+
+                          return (
+                            <div
+                              key={sampleImage.id}
+                              onClick={() => handleSampleImageSelect(sampleImage)}
+                              className={`cursor-pointer border-2 rounded-lg p-1 transition-all ${
+                                isSelected
+                                  ? 'border-green-600 ring-2 ring-green-300'
+                                  : 'border-gray-200 hover:border-green-400'
+                              }`}
+                            >
+                              <img
+                                src={imageUrl}
+                                alt={sampleImage.fruit}
+                                className="w-full h-16 object-cover rounded"
+                              />
+                            </div>
+                          )
+                        })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Selected Image Preview */}
+              {selectedSampleImage && (
+                <div className="mb-6">
+                  <p className="text-gray-700 font-semibold mb-2">Selected Image</p>
+                  <div className="border-2 border-green-300 rounded-lg p-4 bg-gray-50">
+                    <img
+                      src={cnnAPI.getSampleImageUrl(...selectedSampleImage.id.split('/'))}
+                      alt="Selected"
+                      className="max-w-full h-auto max-h-48 mx-auto rounded"
+                    />
+                    <p className="text-center mt-2 text-sm text-gray-600">
+                      Actual: <span className="font-bold text-green-700">{selectedSampleImage.fruit}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handlePredictSample}
+                disabled={loading || !selectedSampleImage}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Classifying...' : 'Classify Selected Image'}
+              </button>
+            </div>
+          )}
 
           {error && (
             <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg flex items-center">

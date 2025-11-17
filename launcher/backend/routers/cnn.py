@@ -4,6 +4,7 @@ Converts Streamlit functionality to REST API endpoints
 """
 
 from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 import torch
@@ -15,6 +16,7 @@ import json
 import io
 import base64
 from pathlib import Path
+import random
 
 # Create router
 router = APIRouter()
@@ -379,6 +381,163 @@ async def predict_base64(request: ImageBase64Request):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+
+
+class SampleImage(BaseModel):
+    """Sample image from dataset"""
+    id: str
+    fruit: str
+    filename: str
+
+
+@router.get("/sample-images", response_model=List[SampleImage])
+async def get_sample_images(per_fruit: int = 5):
+    """
+    Get sample images from the preprocessed dataset
+
+    **Parameters:**
+    - per_fruit: Number of sample images per fruit class (default: 5)
+
+    **Returns:**
+    - List of sample images with metadata
+    """
+    try:
+        # Try to find preprocessed images directory
+        cnn_project_path = Path(__file__).parent.parent.parent.parent / "CNN_Project"
+        preprocessed_path = cnn_project_path / "preprocessed_images"
+
+        if not preprocessed_path.exists():
+            raise HTTPException(status_code=404, detail="Preprocessed images directory not found")
+
+        # Load metadata to get fruit names
+        _, metadata = load_cnn_model()
+        if metadata is None:
+            raise HTTPException(status_code=503, detail="Model metadata not loaded")
+
+        fruit_names = metadata['fruit_names']
+        sample_images = []
+
+        # Get sample images for each fruit
+        for fruit_name in fruit_names:
+            # Sanitize fruit name for directory
+            safe_fruit_name = fruit_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+            fruit_dir = preprocessed_path / safe_fruit_name
+
+            if fruit_dir.exists() and fruit_dir.is_dir():
+                # Get all images in this fruit directory
+                image_files = list(fruit_dir.glob("*.png")) + list(fruit_dir.glob("*.jpg"))
+
+                # Randomly sample images
+                if len(image_files) > per_fruit:
+                    random.seed(42)  # Consistent samples
+                    image_files = random.sample(image_files, per_fruit)
+
+                # Add to sample list
+                for img_path in image_files:
+                    sample_images.append({
+                        "id": f"{safe_fruit_name}/{img_path.name}",
+                        "fruit": fruit_name,
+                        "filename": img_path.name
+                    })
+
+        return sample_images
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading sample images: {str(e)}")
+
+
+@router.get("/sample-image/{fruit}/{filename}")
+async def get_sample_image(fruit: str, filename: str):
+    """
+    Get a specific sample image file
+
+    **Parameters:**
+    - fruit: Fruit class name (URL-safe)
+    - filename: Image filename
+
+    **Returns:**
+    - Image file
+    """
+    try:
+        # Find preprocessed images directory
+        cnn_project_path = Path(__file__).parent.parent.parent.parent / "CNN_Project"
+        preprocessed_path = cnn_project_path / "preprocessed_images"
+
+        # Construct image path
+        image_path = preprocessed_path / fruit / filename
+
+        if not image_path.exists():
+            raise HTTPException(status_code=404, detail="Image not found")
+
+        return FileResponse(image_path, media_type="image/png")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading image: {str(e)}")
+
+
+@router.post("/predict-sample/{fruit}/{filename}", response_model=PredictionResult)
+async def predict_sample_image(fruit: str, filename: str):
+    """
+    Classify a sample image from the dataset
+
+    **Parameters:**
+    - fruit: Fruit class name (URL-safe)
+    - filename: Image filename
+
+    **Returns:**
+    - predicted_class: Name of the predicted fruit
+    - confidence: Model confidence (0-1)
+    - probabilities: Probability distribution across all fruit classes
+    """
+    model, metadata = load_cnn_model()
+
+    if model is None or metadata is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    try:
+        # Find and load image
+        cnn_project_path = Path(__file__).parent.parent.parent.parent / "CNN_Project"
+        preprocessed_path = cnn_project_path / "preprocessed_images"
+        image_path = preprocessed_path / fruit / filename
+
+        if not image_path.exists():
+            raise HTTPException(status_code=404, detail="Image not found")
+
+        # Load and preprocess image
+        image = Image.open(image_path)
+        img_tensor = preprocess_image(image)
+
+        # Make prediction
+        with torch.no_grad():
+            output = model(img_tensor)
+            probabilities = F.softmax(output, dim=1)
+            pred_class_idx = torch.argmax(probabilities, dim=1).item()
+            confidence = probabilities[0][pred_class_idx].item()
+
+        # Get fruit names
+        fruit_names = metadata['fruit_names']
+        predicted_fruit = fruit_names[pred_class_idx]
+
+        # Create probability distribution
+        prob_dict = {
+            fruit_names[i]: float(probabilities[0][i].item())
+            for i in range(len(fruit_names))
+        }
+
+        return {
+            "predicted_class": predicted_fruit,
+            "confidence": confidence,
+            "probabilities": prob_dict
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing sample image: {str(e)}")
 
 
 # Preload model on startup (optional)

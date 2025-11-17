@@ -1,14 +1,14 @@
 {
   "fruit_names": [
+    "Pear",
     "Apple",
     "Tomato",
-    "Pear",
     "Peach",
-    "Cherry"
+    "Cucumber"
   ],
   "num_classes": 5,
-  "test_accuracy": 0.996,
-  "best_val_accuracy": 0.9973333333333333,
+  "test_accuracy": 0.988,
+  "best_val_accuracy": 0.9906666666666667,
   "total_images": 5000,
   "train_size": 3500,
   "val_size": 750,

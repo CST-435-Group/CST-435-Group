@@ -22,7 +22,10 @@
       "Bash(npm run:*)",
       "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload)",
       "Bash(curl:*)",
-      "Bash(git check-ignore:*)"
+      "Bash(git check-ignore:*)",
+      "Bash(dir:*)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" optimizer_comparison.py)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" train_model.py)"
     ],
     "deny": [],
     "ask": []
