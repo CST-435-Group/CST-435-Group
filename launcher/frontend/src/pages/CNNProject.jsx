@@ -3,7 +3,7 @@ import { cnnAPI, annAPI, nlpAPI, docsAPI } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import { Camera, Upload, AlertCircle, CheckCircle, Image as ImageIcon } from 'lucide-react'
 import { useModelManager } from '../hooks/useModelManager'
-import OptimizationReport from '../components/optimizationReport.jsx'
+import OptimizationReport from '../components/OptimizationReport.jsx'
 
 
 export default function CNNProject() {
