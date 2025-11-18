@@ -1,0 +1,30 @@
+# GAN Project Requirements
+# Install with: pip install -r requirements.txt
+
+# Core Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Image Processing
+Pillow>=9.0.0
+
+# Data Science
+numpy>=1.21.0
+
+# Progress Bars
+tqdm>=4.65.0
+
+# Plotting and Visualization
+matplotlib>=3.5.0
+
+# Machine Learning Utilities
+scikit-learn>=1.0.0
+
+# Optional but recommended for better plotting
+seaborn>=0.12.0
+
+# For JSON handling (usually included with Python)
+# json (built-in)
+
+# For path handling (usually included with Python)
+# pathlib (built-in)

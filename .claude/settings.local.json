@@ -25,7 +25,10 @@
       "Bash(git check-ignore:*)",
       "Bash(dir:*)",
       "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" optimizer_comparison.py)",
-      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" train_model.py)"
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" train_model.py)",
+      "Bash(nvidia-smi:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(setx PATH \"%PATH%;C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312;C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\")"
     ],
     "deny": [],
     "ask": []
