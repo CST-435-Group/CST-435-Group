@@ -1,34 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cat:*)",
-      "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nFix ANN model loading in Railway deployment\n\n- Enable ANN model preloading on startup for better UX\n- Add detailed error logging to diagnose model loading issues\n- Fix .gitignore excluding model files and data from deployment\n- Allow *.pth, *.csv, and data/ directories to be included in deployment\n\nThe previous .gitignore was preventing the ANN model files and NBA data\nfrom being deployed to Railway, causing \"Model not loaded\" errors in the\nfrontend.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git push:*)",
-      "Bash(git pull:*)",
-      "Bash(git stash:*)",
-      "Bash(git commit:*)",
-      "Bash(git fetch:*)",
-      "Bash(git log:*)",
-      "Bash(python:*)",
-      "Bash(npm install)",
-      "Bash(npm run dev:*)",
-      "Bash(pip install:*)",
-      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m pip install -r requirements.txt)",
-      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m uvicorn:*)",
-      "Bash(timeout /t 3)",
-      "Bash(npm start)",
-      "Bash(timeout /t 5)",
-      "Bash(npm run:*)",
-      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload)",
-      "Bash(curl:*)",
-      "Bash(git check-ignore:*)",
-      "Bash(dir:*)",
-      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" optimizer_comparison.py)",
-      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" train_model.py)",
-      "Bash(nvidia-smi:*)",
-      "Bash(pip uninstall:*)",
-      "Bash(setx PATH \"%PATH%;C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312;C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\")"
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" GAN/convert_existing_models.py)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

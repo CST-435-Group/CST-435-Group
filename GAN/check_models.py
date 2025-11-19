@@ -49,12 +49,21 @@ key_models = {
 for model_name, description in key_models.items():
     model_path = models_dir / model_name
     metadata_path = models_dir / model_name.replace('.pth', '_metadata.json')
+    manifest_path = models_dir / f"{model_name.replace('.pth', '')}.manifest.json"
 
     if model_path.exists():
         size_mb = model_path.stat().st_size / (1024 * 1024)
         print(f"\n✅ {model_name}")
         print(f"   {description}")
-        print(f"   Size: {size_mb:.1f} MB")
+
+        # Check if this is a chunked model
+        if manifest_path.exists():
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            print(f"   Size: {manifest['total_size_mb']:.1f} MB (chunked into {manifest['total_chunks']} files)")
+            print(f"   📦 Chunked model (GitHub-friendly)")
+        else:
+            print(f"   Size: {size_mb:.1f} MB")
 
         if metadata_path.exists():
             with open(metadata_path, 'r') as f:
@@ -79,8 +88,14 @@ checkpoints = sorted(models_dir.glob('checkpoint_epoch_*.pth'))
 if checkpoints:
     print(f"\nFound {len(checkpoints)} checkpoint(s):")
     for cp in checkpoints:
-        size_mb = cp.stat().st_size / (1024 * 1024)
-        print(f"  ✅ {cp.name} ({size_mb:.1f} MB)")
+        manifest_path = models_dir / f"{cp.stem}.manifest.json"
+        if manifest_path.exists():
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            print(f"  ✅ {cp.name} ({manifest['total_size_mb']:.1f} MB, {manifest['total_chunks']} chunks)")
+        else:
+            size_mb = cp.stat().st_size / (1024 * 1024)
+            print(f"  ✅ {cp.name} ({size_mb:.1f} MB)")
 else:
     print("\n❌ No checkpoints found")
     print("   (Checkpoints are saved every 10 epochs)")

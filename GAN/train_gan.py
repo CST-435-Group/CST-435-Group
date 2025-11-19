@@ -32,6 +32,9 @@ import matplotlib.pyplot as plt
 # Add CNN_Project to path for model loading
 sys.path.append(str(Path(__file__).parent.parent / 'CNN_Project'))
 
+# Import model utilities for chunked saving/loading
+from model_utils import save_model_chunked, load_model_chunked
+
 # Set random seeds for reproducibility
 torch.manual_seed(42)
 np.random.seed(42)
@@ -489,8 +492,8 @@ for epoch in range(num_epochs):
         'avg_D_fake': avg_D_fake
     }
 
-    # Save latest model
-    torch.save(model_data, 'GAN/models/latest_model.pth')
+    # Save latest model (with automatic chunking if needed)
+    save_model_chunked(model_data, 'GAN/models/latest_model.pth')
 
     # Save metadata for easy inspection
     metadata = {
@@ -515,8 +518,8 @@ for epoch in range(num_epochs):
         best_d_fake_score = d_fake_distance
         best_epoch = epoch + 1
 
-        # Save best model
-        torch.save(model_data, 'GAN/models/best_model.pth')
+        # Save best model (with automatic chunking if needed)
+        save_model_chunked(model_data, 'GAN/models/best_model.pth')
 
         # Save best metadata
         best_metadata = metadata.copy()
@@ -540,7 +543,7 @@ for epoch in range(num_epochs):
 
     # Save numbered checkpoints every 10 epochs (for resume training)
     if (epoch + 1) % 10 == 0:
-        torch.save(model_data, f'GAN/models/checkpoint_epoch_{epoch+1:03d}.pth')
+        save_model_chunked(model_data, f'GAN/models/checkpoint_epoch_{epoch+1:03d}.pth')
 
         checkpoint_metadata = metadata.copy()
         with open(f'GAN/models/checkpoint_epoch_{epoch+1:03d}_metadata.json', 'w') as f:
@@ -582,7 +585,7 @@ final_model_data = {
     'best_d_fake_score': best_d_fake_score
 }
 
-torch.save(final_model_data, 'GAN/models/final_gan.pth')
+save_model_chunked(final_model_data, 'GAN/models/final_gan.pth')
 
 # Final metadata
 final_metadata = {

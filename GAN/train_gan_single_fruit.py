@@ -40,6 +40,9 @@ sys.path.append(str(Path(__file__).parent.parent / 'CNN_Project'))
 # Import GAN models from main training script
 from train_gan import Generator, Discriminator
 
+# Import model utilities for chunked saving/loading
+from model_utils import save_model_chunked, load_model_chunked
+
 # Set random seeds
 torch.manual_seed(42)
 np.random.seed(42)
@@ -379,8 +382,8 @@ for epoch in range(NUM_EPOCHS):
         'avg_D_fake': avg_D_fake
     }
 
-    # Save latest
-    torch.save(model_data, f'{FRUIT_DIR}/latest_model.pth')
+    # Save latest (with automatic chunking if needed)
+    save_model_chunked(model_data, f'{FRUIT_DIR}/latest_model.pth')
 
     metadata = {
         'epoch': epoch + 1,
@@ -402,7 +405,7 @@ for epoch in range(NUM_EPOCHS):
         best_d_fake_score = d_fake_distance
         best_epoch = epoch + 1
 
-        torch.save(model_data, f'{FRUIT_DIR}/best_model.pth')
+        save_model_chunked(model_data, f'{FRUIT_DIR}/best_model.pth')
 
         best_metadata = metadata.copy()
         best_metadata['best_epoch'] = best_epoch
@@ -422,9 +425,9 @@ for epoch in range(NUM_EPOCHS):
         generator.train()
         print(f"  [SAVED] Progress images to GAN/training_progress/{FRUIT_TYPE}/epoch_{epoch+1:03d}.png")
 
-    # Save checkpoints
+    # Save checkpoints (with automatic chunking if needed)
     if (epoch + 1) % 10 == 0:
-        torch.save(model_data, f'{FRUIT_DIR}/checkpoint_epoch_{epoch+1:03d}.pth')
+        save_model_chunked(model_data, f'{FRUIT_DIR}/checkpoint_epoch_{epoch+1:03d}.pth')
         print(f"  [CHECKPOINT] Saved to {FRUIT_DIR}/checkpoint_epoch_{epoch+1:03d}.pth")
 
 plt.ioff()

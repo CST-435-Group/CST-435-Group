@@ -18,12 +18,15 @@ import argparse
 # Import Generator from train_gan
 from train_gan import Generator
 
+# Import model utilities
+from model_utils import load_model_chunked
+
 # Add CNN_Project to path
 sys.path.append(str(Path(__file__).parent.parent / 'CNN_Project'))
 
 def load_generator(model_path, device):
-    """Load trained generator from checkpoint"""
-    checkpoint = torch.load(model_path, map_location=device)
+    """Load trained generator from checkpoint (supports chunked models)"""
+    checkpoint = load_model_chunked(model_path, device=str(device))
 
     if 'noise_dim' in checkpoint:
         noise_dim = checkpoint['noise_dim']
