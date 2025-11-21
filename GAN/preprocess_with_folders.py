@@ -71,21 +71,21 @@ def preprocess_with_folders(input_dir, output_dir, target_size=(200, 200)):
 
     Input structure:
       input_dir/
-        Leopard 2 tank/
-          frame_001.png
-          frame_002.png
-        M1 Abrams/
-          frame_003.png
-          frame_004.png
+        M1A1_Abrams_front/
+          *.png
+        M1A1_Abrams_side/
+          *.png
+        Leopard2_top/
+          *.png
 
     Output structure:
       output_dir/
-        leopard2/
-          leopard2_00000.png
-          leopard2_00001.png
-        m1abrams/
-          m1abrams_00000.png
-          m1abrams_00001.png
+        M1A1_Abrams_front/
+          *.png
+        M1A1_Abrams_side/
+          *.png
+        Leopard2_top/
+          *.png
     """
     input_path = Path(input_dir)
     output_path = Path(output_dir)
@@ -97,56 +97,25 @@ def preprocess_with_folders(input_dir, output_dir, target_size=(200, 200)):
     print(f"Output: {output_dir}")
     print(f"Target size: {target_size[0]}x{target_size[1]}")
 
-    # Find all subdirectories (tank types)
+    # Find all subdirectories (tank types + views)
     subdirs = [d for d in input_path.iterdir() if d.is_dir()]
 
     if len(subdirs) == 0:
         print("\n[ERROR] No subdirectories found!")
-        print("Expected structure: input_dir/TankType/images...")
+        print("Expected structure: input_dir/TankType_view/images...")
         return
 
     print(f"\n[STEP 1] Found {len(subdirs)} classes:")
     for subdir in subdirs:
         print(f"  - {subdir.name}")
 
-    # Create mapping of folder names to clean class names
+    # No name mapping - preserve folder names as-is
+    # Folders should already be named like: M1A1_Abrams_front, Leopard2_side, etc.
     class_mapping = {}
     for subdir in subdirs:
-        # Clean folder name for class name
-        # "Leopard 2 tank" -> "leopard2"
-        # "M1 Abrams tank" -> "m1abrams"
-        # "T-90 battle tank" -> "t90"
-        original_name = subdir.name.lower()
+        class_mapping[subdir.name] = subdir.name
 
-        # Remove common words first
-        clean_name = original_name.replace(' tank', '').replace('tank', '')
-        clean_name = clean_name.replace(' battle', '').replace('battle', '')
-        clean_name = clean_name.replace(' main', '').replace('main', '')
-
-        # Remove spaces, hyphens, underscores
-        clean_name = clean_name.replace(' ', '').replace('-', '').replace('_', '').strip()
-
-        # Special handling for specific tank types
-        if 'leopard' in clean_name and '2' in clean_name:
-            clean_name = 'leopard2'
-        elif 'leopard' in clean_name:
-            clean_name = 'leopard'
-        elif 'm1' in clean_name or 'abrams' in clean_name:
-            clean_name = 'm1abrams'
-        elif 't90m' in clean_name or 't-90m' in original_name:
-            clean_name = 't90m'
-        elif 't90' in clean_name or 't-90' in original_name:
-            clean_name = 't90'
-
-        # If clean_name is empty after all replacements, use a sanitized version of original
-        if not clean_name:
-            clean_name = ''.join(c for c in original_name if c.isalnum()).lower()
-
-        class_mapping[subdir.name] = clean_name
-
-    print(f"\nClass name mapping:")
-    for original, clean in class_mapping.items():
-        print(f"  '{original}' -> '{clean}'")
+    print(f"\nPreserving original class names (no mapping)")
 
     # Process each class folder
     print(f"\n[STEP 2] Processing images...")
@@ -281,11 +250,11 @@ def main():
     print("=" * 80)
 
     input_dir = 'GAN/datasets/military_vehicles_raw'
-    output_dir = 'GAN/datasets/military_vehicles_processed'
+    output_dir = 'GAN/datasets/military_vehicles_with_views'
 
     print(f"\nThis script will:")
     print(f"  1. Find all subdirectories in: {input_dir}")
-    print(f"  2. Process each as a separate class")
+    print(f"  2. Process each as a separate class (preserving tank+view names)")
     print(f"  3. Maintain folder structure in: {output_dir}")
     print(f"  4. Resize/crop all images to 200x200")
     print(f"  5. Filter out bad images")
@@ -307,15 +276,10 @@ def main():
         print("\n" + "=" * 80)
         print("NEXT STEPS")
         print("=" * 80)
-        print("\n1. Update training script:")
-        print("   Open: GAN/train_gan_conditional.py")
-        print(f"   Change line 40: DATASET_PATH = '{output_dir}'")
-        print("\n2. Train:")
-        print("   python GAN/train_gan_conditional.py")
-        print("\n3. Generate:")
-        print("   python GAN/generate_images_conditional.py --class leopard2 --num 10")
-        print("   python GAN/generate_images_conditional.py --class m1abrams --num 10")
-        print("   python GAN/generate_images_conditional.py --class t90 --num 10")
+        print("\nTrain dual conditional GAN:")
+        print("   python train_gan_dual_conditional.py")
+        print("\nGenerate specific tank+view combinations:")
+        print("   The GAN will automatically parse tank type and view angle from folder names")
 
 if __name__ == "__main__":
     main()

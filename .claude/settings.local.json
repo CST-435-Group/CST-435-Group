@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" GAN/convert_existing_models.py)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": []

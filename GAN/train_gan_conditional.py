@@ -49,8 +49,8 @@ BATCH_SIZE = 32
 NUM_EPOCHS = 200
 LR = 0.0002
 
-# Dataset path
-DATASET_PATH = 'GAN/datasets/military_vehicles_processed'
+# Dataset path - UPDATE THIS to point to your organized folders
+DATASET_PATH = 'GAN/datasets/military_vehicles_processed'  # Your preprocessed tank folders
 
 # Create directories
 os.makedirs('GAN/generated_images_conditional', exist_ok=True)
@@ -229,20 +229,19 @@ class ConditionalDiscriminator(nn.Module):
 # --------------------------
 class ConditionalImageDataset(Dataset):
     """
-    Load images and automatically assign class labels based on folder/filename
+    Load images and detect class labels from FOLDER STRUCTURE
 
     Expected structure:
-      datasets/military_vehicles_processed/
-        - Files with 'tank' in name -> class 0
-        - Files with 'jet' or 'aircraft' -> class 1
-        - Files with 'ship' or 'warship' -> class 2
-        - etc.
+      datasets/military_vehicles_raw/
+        Leopard 2 tank/
+          frame_001.png
+          frame_002.png
+        M1 Abrams/
+          frame_003.png
+        T-90M/
+          frame_004.png
 
-    Or organized in folders:
-      datasets/military_vehicles_processed/
-        tanks/
-        jets/
-        ships/
+    Each subfolder becomes a class, folder names are cleaned for class labels
     """
     def __init__(self, image_dir, transform=None):
         self.image_dir = Path(image_dir)
@@ -252,46 +251,74 @@ class ConditionalImageDataset(Dataset):
         self.labels = []
         self.class_names = []
 
-        # Define class keywords for automatic labeling
-        self.class_keywords = {
-            'tank': ['tank', 'armor'],
-            'jet': ['jet', 'fighter', 'aircraft'],
-            'ship': ['ship', 'warship', 'navy', 'vessel'],
-            'helicopter': ['helicopter', 'heli', 'chopper'],
-            'submarine': ['submarine', 'sub'],
-            'armored_vehicle': ['armored', 'apc', 'ifv'],
-            'drone': ['drone', 'uav'],
-            'other': ['military', 'vehicle']
-        }
+        print(f"\nScanning directory: {image_dir}")
 
-        # Scan directory
-        image_extensions = ['.png', '.jpg', '.jpeg', '.bmp']
-        all_files = []
-        for ext in image_extensions:
-            all_files.extend(list(self.image_dir.rglob(f'*{ext}')))
+        # Find all subdirectories (classes)
+        subdirs = [d for d in self.image_dir.iterdir() if d.is_dir()]
 
-        print(f"\nScanning {len(all_files)} images for class labels...")
+        if len(subdirs) == 0:
+            print("[ERROR] No subdirectories found!")
+            print("Expected structure: image_dir/ClassName/images...")
+            raise ValueError("No class folders found in dataset directory")
 
-        # Assign classes
+        print(f"Found {len(subdirs)} class folders:")
+        for subdir in subdirs:
+            print(f"  - {subdir.name}")
+
+        # Create mapping of folder names to clean class names
+        folder_to_class = {}
+        for subdir in subdirs:
+            # Clean folder name for class name
+            clean_name = subdir.name.lower()
+            clean_name = clean_name.replace(' ', '').replace('-', '').replace('_', '')
+
+            # Remove common words
+            clean_name = clean_name.replace('tank', '').replace('main', '').replace('battle', '')
+
+            # Special handling for specific tanks
+            if 'leopard' in clean_name or 'leo' in clean_name:
+                clean_name = 'leopard2'
+            elif 'm1' in clean_name or 'abrams' in clean_name:
+                clean_name = 'm1abrams'
+            elif 't90' in clean_name or 't-90' in subdir.name.lower():
+                clean_name = 't90m'
+            elif 'challenger' in clean_name:
+                clean_name = 'challenger2'
+            elif 'merkava' in clean_name:
+                clean_name = 'merkava'
+
+            # If empty after cleaning, use original
+            if not clean_name:
+                clean_name = subdir.name.lower().replace(' ', '_')
+
+            folder_to_class[subdir.name] = clean_name
+
+        print(f"\nClass name mapping:")
+        for original, clean in folder_to_class.items():
+            print(f"  '{original}' -> '{clean}'")
+
+        # Scan images in each subfolder
+        image_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.webp']
         class_counts = {}
 
-        for img_path in all_files:
-            # Check parent folder name and filename
-            full_path = str(img_path).lower()
+        print(f"\nScanning images in each class folder...")
 
-            assigned_class = None
-            for class_name, keywords in self.class_keywords.items():
-                if any(keyword in full_path for keyword in keywords):
-                    assigned_class = class_name
-                    break
+        for subdir in subdirs:
+            class_name = folder_to_class[subdir.name]
 
-            if assigned_class is None:
-                assigned_class = 'other'
+            # Find all images in this folder
+            class_files = []
+            for ext in image_extensions:
+                class_files.extend(list(subdir.glob(f'*{ext}')))
+                class_files.extend(list(subdir.glob(f'*{ext.upper()}')))
 
-            self.image_paths.append(img_path)
-            self.labels.append(assigned_class)
+            print(f"  {class_name}: {len(class_files)} images")
 
-            class_counts[assigned_class] = class_counts.get(assigned_class, 0) + 1
+            for img_path in class_files:
+                self.image_paths.append(img_path)
+                self.labels.append(class_name)
+
+            class_counts[class_name] = len(class_files)
 
         # Create class name to index mapping
         self.class_names = sorted(set(self.labels))
@@ -395,9 +422,17 @@ optimizer_D = optim.Adam(discriminator.parameters(), lr=LR, betas=(0.5, 0.999))
 # --------------------------
 print("\n[STEP 4] Starting training...")
 
-# Fixed noise for each class (for visualization)
-fixed_noise = torch.randn(NUM_CLASSES * 4, NOISE_DIM, device=device)
-fixed_labels = torch.tensor([i for i in range(NUM_CLASSES) for _ in range(4)], device=device)
+# Fixed noise for visualization - 10x10 grid = 100 images
+# Distribute evenly across classes
+images_per_class = 100 // NUM_CLASSES
+remainder = 100 % NUM_CLASSES
+
+fixed_noise = torch.randn(100, NOISE_DIM, device=device)
+fixed_labels = []
+for i in range(NUM_CLASSES):
+    count = images_per_class + (1 if i < remainder else 0)
+    fixed_labels.extend([i] * count)
+fixed_labels = torch.tensor(fixed_labels, device=device)
 
 history = {'D_loss': [], 'G_loss': [], 'D_real': [], 'D_fake': []}
 
@@ -511,16 +546,15 @@ for epoch in range(NUM_EPOCHS):
         save_model_chunked(model_data, 'GAN/models_conditional/best_model.pth')
         print(f"  [BEST] Saved best model!")
 
-    # Generate samples for each class
-    if (epoch + 1) % 5 == 0:
-        generator.eval()
-        with torch.no_grad():
-            samples = generator(fixed_noise, fixed_labels)
-            samples = (samples + 1) / 2
-            save_image(samples, f'GAN/training_progress_conditional/epoch_{epoch+1:03d}.png',
-                      nrow=4, normalize=False)
-        generator.train()
-        print(f"  [SAVED] Progress images (one row per class)")
+    # Generate 10x10 grid after EVERY epoch
+    generator.eval()
+    with torch.no_grad():
+        samples = generator(fixed_noise, fixed_labels)
+        samples = (samples + 1) / 2
+        save_image(samples, f'GAN/training_progress_conditional/epoch_{epoch+1:03d}.png',
+                  nrow=10, normalize=False)
+    generator.train()
+    print(f"  [SAVED] 10x10 grid → training_progress_conditional/epoch_{epoch+1:03d}.png")
 
     if (epoch + 1) % 10 == 0:
         save_model_chunked(model_data, f'GAN/models_conditional/checkpoint_epoch_{epoch+1:03d}.pth')
