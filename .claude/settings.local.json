@@ -7,7 +7,13 @@
       "Bash(git reset:*)",
       "Bash(dir:*)",
       "Bash(nul)",
-      "Bash(wmic:*)"
+      "Bash(wmic:*)",
+      "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" add .gitignore \"GAN/backend/gan_router.py\" \"GAN/train_gan_dual_conditional.py\")",
+      "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" status --short)",
+      "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" status \"GAN/backend/gan_router.py\" \"GAN/train_gan_dual_conditional.py\")",
+      "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" diff --name-status)",
+      "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" status --porcelain \"GAN/\")",
+      "Bash(git -C:*)"
     ],
     "deny": [],
     "ask": []
