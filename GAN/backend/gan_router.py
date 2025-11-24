@@ -101,6 +101,33 @@ def get_model_dir() -> Path:
     return Path(__file__).parent.parent / "models_dual_conditional"
 
 
+def load_model_chunked(model_path: Path):
+    """Load model from chunks if manifest exists, otherwise load directly"""
+    manifest_path = Path(str(model_path) + '.manifest.json')
+
+    if manifest_path.exists():
+        # Load from chunks
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+
+        state_dict = {}
+        base_dir = model_path.parent
+
+        for chunk_name in manifest['chunks']:
+            chunk_path = base_dir / chunk_name
+            chunk_dict = torch.load(chunk_path, map_location='cpu', weights_only=True)
+            state_dict.update(chunk_dict)
+
+        print(f"  [GAN] Loaded {len(manifest['chunks'])} chunks from {manifest_path.name}")
+        return state_dict
+    elif model_path.exists():
+        # Load directly
+        print(f"  [GAN] Loaded {model_path.name}")
+        return torch.load(model_path, map_location='cpu', weights_only=True)
+    else:
+        raise FileNotFoundError(f"Model not found: {model_path}")
+
+
 def load_gan_generator(model_name: Optional[str] = None):
     """Lazy load GAN generator model"""
     global gan_generator, gan_mappings
@@ -135,7 +162,9 @@ def load_gan_generator(model_name: Optional[str] = None):
             if epoch_models:
                 model_path = epoch_models[-1]
 
-    if not model_path.exists():
+    # Check if model exists (either as file or chunked with manifest)
+    manifest_path = Path(str(model_path) + '.manifest.json')
+    if not model_path.exists() and not manifest_path.exists():
         raise FileNotFoundError(f"Generator model not found: {model_path}")
 
     print(f"[GAN] Loading generator from: {model_path}")
@@ -148,7 +177,8 @@ def load_gan_generator(model_name: Optional[str] = None):
         embed_dim=EMBED_DIM
     )
 
-    state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
+    # Use chunked loader (handles both chunked and regular models)
+    state_dict = load_model_chunked(model_path)
     generator.load_state_dict(state_dict)
     generator.eval()
 
@@ -295,7 +325,10 @@ async def get_model_info():
     available_models = []
     for model_file in sorted(model_dir.glob("generator_epoch_*.pth")):
         available_models.append(model_file.name)
-    if (model_dir / "latest_generator.pth").exists():
+    # Check for latest_generator (either as file or chunked)
+    latest_path = model_dir / "latest_generator.pth"
+    latest_manifest = model_dir / "latest_generator.pth.manifest.json"
+    if latest_path.exists() or latest_manifest.exists():
         available_models.append("latest_generator.pth")
 
     return {
@@ -324,8 +357,10 @@ async def get_available_models():
             "type": "checkpoint"
         })
 
-    # Add latest model
-    if (model_dir / "latest_generator.pth").exists():
+    # Add latest model (check for both file and chunked versions)
+    latest_path = model_dir / "latest_generator.pth"
+    latest_manifest = model_dir / "latest_generator.pth.manifest.json"
+    if latest_path.exists() or latest_manifest.exists():
         models.append({
             "name": "latest_generator.pth",
             "display_name": "Latest (Best)",
@@ -346,7 +381,9 @@ async def switch_model(model_name: str):
     model_dir = get_model_dir()
     model_path = model_dir / model_name
 
-    if not model_path.exists():
+    # Check if model exists (either as file or chunked with manifest)
+    manifest_path = Path(str(model_path) + '.manifest.json')
+    if not model_path.exists() and not manifest_path.exists():
         raise HTTPException(status_code=404, detail=f"Model not found: {model_name}")
 
     # Unload current model
