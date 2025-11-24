@@ -14,7 +14,7 @@ export default function CNNProject() {
   const [prediction, setPrediction] = useState(null)
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
-  const [uploadMode, setUploadMode] = useState('upload') // 'upload' or 'dataset'
+  const [uploadMode, setUploadMode] = useState('dataset') // 'upload' or 'dataset'
   const [sampleImages, setSampleImages] = useState([])
   const [selectedSampleImage, setSelectedSampleImage] = useState(null)
 
@@ -162,22 +162,6 @@ export default function CNNProject() {
           <div className="flex mb-6 border-b border-gray-200">
             <button
               onClick={() => {
-                setUploadMode('upload')
-                setPrediction(null)
-                setError(null)
-                setSelectedSampleImage(null)
-              }}
-              className={`flex-1 py-3 px-4 font-semibold transition-colors ${
-                uploadMode === 'upload'
-                  ? 'text-green-600 border-b-2 border-green-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Upload className="inline mr-2" size={20} />
-              Upload Image
-            </button>
-            <button
-              onClick={() => {
                 setUploadMode('dataset')
                 setPrediction(null)
                 setError(null)
@@ -192,6 +176,22 @@ export default function CNNProject() {
             >
               <ImageIcon className="inline mr-2" size={20} />
               Browse Dataset
+            </button>
+            <button
+              onClick={() => {
+                setUploadMode('upload')
+                setPrediction(null)
+                setError(null)
+                setSelectedSampleImage(null)
+              }}
+              className={`flex-1 py-3 px-4 font-semibold transition-colors ${
+                uploadMode === 'upload'
+                  ? 'text-green-600 border-b-2 border-green-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Upload className="inline mr-2" size={20} />
+              Upload Image
             </button>
           </div>
 
