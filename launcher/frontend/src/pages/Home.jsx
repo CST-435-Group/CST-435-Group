@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Brain, Camera, MessageSquare, MessageCircle, Dna, ArrowRight } from 'lucide-react'
+import { Brain, Camera, MessageSquare, MessageCircle, Dna, Sparkles, ArrowRight } from 'lucide-react'
 import { docsAPI } from '../services/api'
 
 export default function Home() {
@@ -74,6 +74,20 @@ export default function Home() {
         'Adjustable GA parameters',
         'Interactive evolution control'
       ]
+    },
+    {
+      id: 'gan',
+      title: 'GAN - Military Vehicle Generation',
+      description: 'Dual Conditional GAN for generating synthetic military vehicle images with tank type and view angle control',
+      icon: Sparkles,
+      color: 'from-amber-500 to-orange-700',
+      path: '/gan',
+      features: [
+        'Multiple tank types (M1A1, Leopard2, T90)',
+        'View angle selection (front, side, back)',
+        'Model checkpoint selection',
+        'Batch image generation'
+      ]
     }
   ]
 
@@ -93,7 +107,7 @@ export default function Home() {
       </div>
 
       {/* Project Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-8 max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 max-w-7xl mx-auto">
         {projects.map((project) => {
           const Icon = project.icon
           return (
@@ -145,7 +159,7 @@ export default function Home() {
         <div className="bg-white bg-opacity-90 rounded-2xl shadow-xl p-8">
           <h3 className="text-3xl font-bold text-gray-800 mb-4">About This Project</h3>
           <p className="text-gray-700 text-lg leading-relaxed mb-4">
-            This unified launcher provides access to five different machine learning and AI projects developed for CST-435.
+            This unified launcher provides access to six different machine learning and AI projects developed for CST-435.
             Each project demonstrates different AI techniques and architectures:
           </p>
           <ul className="space-y-2 text-gray-700">
@@ -168,6 +182,10 @@ export default function Home() {
             <li className="flex items-start">
               <span className="font-semibold mr-2">•</span>
               <span><strong>GA:</strong> Implements Genetic Algorithms for evolutionary optimization and text evolution</span>
+            </li>
+            <li className="flex items-start">
+              <span className="font-semibold mr-2">•</span>
+              <span><strong>GAN:</strong> Uses Generative Adversarial Networks for synthetic image generation with dual conditioning</span>
             </li>
           </ul>
         </div>

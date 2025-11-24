@@ -119,6 +119,20 @@ export const rnnAPI = {
   unload: () => api.post('/rnn/unload'),
 }
 
+// GAN API calls
+export const ganAPI = {
+  getInfo: () => api.get('/gan/'),
+  getHealth: () => api.get('/gan/health'),
+  getModelInfo: () => api.get('/gan/info'),
+  getAvailableModels: () => api.get('/gan/models'),
+  switchModel: (modelName) => api.post('/gan/models/switch', null, { params: { model_name: modelName } }),
+  getTanks: () => api.get('/gan/tanks'),
+  getViews: () => api.get('/gan/views'),
+  generate: (data) => api.post('/gan/generate', data),
+  preload: () => api.post('/gan/preload'),
+  unload: () => api.post('/gan/unload'),
+}
+
 // General API calls
 export const generalAPI = {
   getRoot: () => api.get('/'),

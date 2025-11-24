@@ -16,19 +16,27 @@ BATCH_SIZE = 16
 LATENT_DIM = 100
 EMBED_DIM = 50
 NUM_EPOCHS = 200
-LR_G = 0.0002
-LR_D = 0.0001  # Lower discriminator learning rate to prevent it from getting too strong
-BETA1 = 0.5
+LR_G = 0.00005  # Lower generator learning rate
+LR_D = 0.00005  # Same as generator for WGAN-GP
+BETA1 = 0.0  # WGAN-GP recommends beta1=0
+BETA2 = 0.9  # WGAN-GP recommends beta2=0.9
 IMAGE_SIZE = 200
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Training stability settings
+# WGAN-GP settings
+USE_WGAN_GP = True  # Use Wasserstein loss with gradient penalty
+LAMBDA_GP = 10  # Gradient penalty coefficient
+N_CRITIC = 1  # Reduced from 5 to prevent OOM and speed up training
+CLIP_GRAD = 1.0  # Gradient clipping to prevent exploding gradients
+
+# Training stability settings (used when USE_WGAN_GP=False)
 LABEL_SMOOTHING = 0.1  # Smooth real labels to 0.9 instead of 1.0
 NOISE_STD = 0.05  # Add small noise to discriminator inputs
-D_TRAIN_RATIO = 1  # Train discriminator every N batches (1 = every batch)
+D_TRAIN_RATIO = 2  # Train discriminator every N batches (1 = every batch)
+USE_NOISY_LABELS = True  # Add randomness to labels
 
-# Dynamic learning rate adjustment
-ADAPTIVE_LR = True  # Enable adaptive learning rate
+# Dynamic learning rate adjustment (disabled for WGAN-GP)
+ADAPTIVE_LR = False  # Disable for WGAN-GP
 TARGET_D_REAL = 0.85  # Target for D(real) - aim for 85% accuracy on real images
 TARGET_D_FAKE = 0.15  # Target for D(fake) - aim for 15% false positives
 LR_ADJUSTMENT_RATE = 0.95  # Multiply/divide LR by this amount when adjusting
@@ -37,8 +45,8 @@ MAX_LR_D = 0.0003  # Maximum discriminator learning rate
 
 # Paths
 DATA_DIR = 'GAN/datasets/military_vehicles_with_views'
-CHECKPOINT_DIR = 'GAN/models_dual_conditional'
-PROGRESS_DIR = 'GAN/training_progress_dual_conditional'
+CHECKPOINT_DIR = 'models_dual_conditional'
+PROGRESS_DIR = 'training_progress_dual_conditional'
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 os.makedirs(PROGRESS_DIR, exist_ok=True)
 
@@ -241,6 +249,40 @@ def generate_sample_images(generator, dataset, epoch, device, num_samples=100):
     generator.train()
 
 
+def compute_gradient_penalty(discriminator, real_imgs, fake_imgs, tank_labels, view_labels, device):
+    """Compute gradient penalty for WGAN-GP"""
+    batch_size = real_imgs.size(0)
+
+    # Random interpolation coefficient
+    alpha = torch.rand(batch_size, 1, 1, 1, device=device)
+    alpha = alpha.expand_as(real_imgs)
+
+    # Interpolate between real and fake
+    interpolated = (alpha * real_imgs + (1 - alpha) * fake_imgs).requires_grad_(True)
+
+    # Get discriminator output for interpolated images
+    d_interpolated = discriminator(interpolated, tank_labels, view_labels)
+
+    # Compute gradients
+    gradients = torch.autograd.grad(
+        outputs=d_interpolated,
+        inputs=interpolated,
+        grad_outputs=torch.ones_like(d_interpolated),
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True
+    )[0]
+
+    # Flatten gradients and compute norm
+    gradients = gradients.view(batch_size, -1)
+    gradient_norm = gradients.norm(2, dim=1)
+
+    # Gradient penalty: (||grad|| - 1)^2
+    gradient_penalty = ((gradient_norm - 1) ** 2).mean()
+
+    return gradient_penalty
+
+
 def train():
     # Data transforms
     transform = transforms.Compose([
@@ -274,46 +316,52 @@ def train():
         embed_dim=EMBED_DIM
     ).to(DEVICE)
 
+    # For WGAN-GP, use discriminator without sigmoid
     discriminator = DualConditionalDiscriminator(
         num_tanks=num_tanks,
         num_views=num_views,
-        embed_dim=EMBED_DIM
+        embed_dim=EMBED_DIM,
+        use_sigmoid=not USE_WGAN_GP  # No sigmoid for WGAN-GP
     ).to(DEVICE)
 
     # Initialize weights
     generator.apply(weights_init)
     discriminator.apply(weights_init)
 
-    # Optimizers
-    optimizer_G = optim.Adam(generator.parameters(), lr=LR_G, betas=(BETA1, 0.999))
-    optimizer_D = optim.Adam(discriminator.parameters(), lr=LR_D, betas=(BETA1, 0.999))
+    # Optimizers - WGAN-GP uses different betas
+    optimizer_G = optim.Adam(generator.parameters(), lr=LR_G, betas=(BETA1, BETA2))
+    optimizer_D = optim.Adam(discriminator.parameters(), lr=LR_D, betas=(BETA1, BETA2))
 
     # Track current learning rates
     current_lr_d = LR_D
     current_lr_g = LR_G
 
-    # Loss
+    # Loss (only used for non-WGAN mode)
     criterion = nn.BCELoss()
 
     # Training loop
     print(f"\n{'='*60}")
     print(f"Starting Training on {DEVICE}")
+    print(f"  Mode: {'WGAN-GP' if USE_WGAN_GP else 'BCE with improvements'}")
     print(f"  Epochs: {NUM_EPOCHS}")
     print(f"  Batch size: {BATCH_SIZE}")
     print(f"  Tank types: {num_tanks}")
     print(f"  View angles: {num_views}")
     print(f"  Latent dim: {LATENT_DIM}")
     print(f"  Embed dim: {EMBED_DIM}")
-    print(f"  LR_G: {LR_G} | LR_D: {LR_D} (starting)")
-    print(f"  Label smoothing: {LABEL_SMOOTHING}")
-    print(f"  Noise: {NOISE_STD}")
-    print(f"  D train ratio: {D_TRAIN_RATIO}")
+    print(f"  LR_G: {LR_G} | LR_D: {LR_D}")
+    if USE_WGAN_GP:
+        print(f"  Lambda GP: {LAMBDA_GP}")
+        print(f"  N_critic: {N_CRITIC}")
+    else:
+        print(f"  Label smoothing: {LABEL_SMOOTHING}")
+        print(f"  Noisy labels: {USE_NOISY_LABELS}")
+        print(f"  Noise STD: {NOISE_STD}")
+        print(f"  D train ratio: {D_TRAIN_RATIO}")
     if ADAPTIVE_LR:
-        print(f"  🔄 Adaptive LR: ON")
+        print(f"  Adaptive LR: ON")
         print(f"     Target D(real): {TARGET_D_REAL} | Target D(fake): {TARGET_D_FAKE}")
         print(f"     LR_D range: {MIN_LR_D} to {MAX_LR_D}")
-    else:
-        print(f"  🔄 Adaptive LR: OFF")
     print(f"{'='*60}\n")
 
     for epoch in range(NUM_EPOCHS):
@@ -323,6 +371,7 @@ def train():
         g_losses = []
         d_real_scores = []
         d_fake_scores = []
+        gp_losses = []  # Track gradient penalty
 
         pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}")
 
@@ -333,71 +382,146 @@ def train():
             tank_labels = tank_labels.to(DEVICE)
             view_labels = view_labels.to(DEVICE)
 
-            # Labels with smoothing (real = 0.9 instead of 1.0 to prevent discriminator overconfidence)
-            real_labels = torch.ones(batch_size, 1, device=DEVICE) * (1.0 - LABEL_SMOOTHING)
-            fake_labels = torch.zeros(batch_size, 1, device=DEVICE)
+            if USE_WGAN_GP:
+                # =====================
+                # WGAN-GP Training
+                # =====================
 
-            # ---------------------
-            # Train Discriminator (but not every batch if D_TRAIN_RATIO > 1)
-            # ---------------------
-            if batch_idx % D_TRAIN_RATIO == 0:
-                optimizer_D.zero_grad()
+                # Train Discriminator (Critic) N_CRITIC times per generator update
+                for _ in range(N_CRITIC):
+                    optimizer_D.zero_grad()
 
-                # Add small noise to real images to prevent discriminator from memorizing
-                noisy_real_imgs = real_imgs + torch.randn_like(real_imgs) * NOISE_STD
+                    # Real images
+                    real_output = discriminator(real_imgs, tank_labels, view_labels)
+                    d_real = real_output.mean()
 
-                # Real images
-                real_output = discriminator(noisy_real_imgs, tank_labels, view_labels)
-                d_real_loss = criterion(real_output, real_labels)
+                    # Fake images
+                    noise = torch.randn(batch_size, LATENT_DIM, device=DEVICE)
+                    fake_imgs = generator(noise, tank_labels, view_labels).detach()
+                    fake_output = discriminator(fake_imgs, tank_labels, view_labels)
+                    d_fake = fake_output.mean()
 
-                # Fake images
+                    # Gradient penalty
+                    gp = compute_gradient_penalty(
+                        discriminator, real_imgs, fake_imgs,
+                        tank_labels, view_labels, DEVICE
+                    )
+
+                    # Wasserstein loss + gradient penalty
+                    # Critic wants: high scores for real, low for fake
+                    d_loss = -d_real + d_fake + LAMBDA_GP * gp
+
+                    d_loss.backward()
+                    # Apply gradient clipping to discriminator
+                    torch.nn.utils.clip_grad_norm_(discriminator.parameters(), CLIP_GRAD)
+                    optimizer_D.step()
+
+                    # Save GP value before freeing memory
+                    gp_value = gp.item()
+
+                    # Free gradient computation graph memory
+                    del gp
+
+                # Train Generator
+                optimizer_G.zero_grad()
+
                 noise = torch.randn(batch_size, LATENT_DIM, device=DEVICE)
                 fake_imgs = generator(noise, tank_labels, view_labels)
+                fake_output = discriminator(fake_imgs, tank_labels, view_labels)
 
-                # Add small noise to fake images too
-                noisy_fake_imgs = fake_imgs.detach() + torch.randn_like(fake_imgs) * NOISE_STD
-                fake_output = discriminator(noisy_fake_imgs, tank_labels, view_labels)
-                d_fake_loss = criterion(fake_output, fake_labels)
+                # Generator wants: high scores for fake (to fool critic)
+                g_loss = -fake_output.mean()
 
-                # Total discriminator loss
-                d_loss = d_real_loss + d_fake_loss
-                d_loss.backward()
-                optimizer_D.step()
-            else:
-                # Still need to generate fakes for generator training
-                noise = torch.randn(batch_size, LATENT_DIM, device=DEVICE)
-                fake_imgs = generator(noise, tank_labels, view_labels)
-                d_loss = torch.tensor(0.0)
-                real_output = torch.tensor(0.0)
-                fake_output = torch.tensor(0.0)
+                g_loss.backward()
+                # Apply gradient clipping to generator
+                torch.nn.utils.clip_grad_norm_(generator.parameters(), CLIP_GRAD)
+                optimizer_G.step()
 
-            # -----------------
-            # Train Generator
-            # -----------------
-            optimizer_G.zero_grad()
-
-            # Generate fake images and try to fool discriminator
-            fake_output_for_g = discriminator(fake_imgs, tank_labels, view_labels)
-            g_loss = criterion(fake_output_for_g, torch.ones(batch_size, 1, device=DEVICE))  # Generator wants discriminator to output 1
-
-            g_loss.backward()
-            optimizer_G.step()
-
-            # Stats (only record discriminator stats when it was actually trained)
-            if batch_idx % D_TRAIN_RATIO == 0:
+                # Stats
                 d_losses.append(d_loss.item())
-                d_real_scores.append(real_output.mean().item())
-                d_fake_scores.append(fake_output.mean().item())
+                g_losses.append(g_loss.item())
+                d_real_scores.append(d_real.item())
+                d_fake_scores.append(d_fake.item())
+                gp_losses.append(gp_value)
 
-            g_losses.append(g_loss.item())
+                pbar.set_postfix({
+                    'D': f'{d_loss.item():.3f}',
+                    'G': f'{g_loss.item():.3f}',
+                    'GP': f'{gp_value:.3f}'
+                })
 
-            # Update progress bar
-            pbar.set_postfix({
-                'D_loss': f'{d_loss.item():.4f}' if batch_idx % D_TRAIN_RATIO == 0 else 'skip',
-                'G_loss': f'{g_loss.item():.4f}'
-            })
+            else:
+                # =====================
+                # BCE Training with improvements
+                # =====================
+
+                # Create labels with optional noise
+                if USE_NOISY_LABELS:
+                    # Random labels in range [0.7, 1.0] for real, [0.0, 0.3] for fake
+                    real_labels = 0.7 + torch.rand(batch_size, 1, device=DEVICE) * 0.3
+                    fake_labels = torch.rand(batch_size, 1, device=DEVICE) * 0.3
+                else:
+                    real_labels = torch.ones(batch_size, 1, device=DEVICE) * (1.0 - LABEL_SMOOTHING)
+                    fake_labels = torch.zeros(batch_size, 1, device=DEVICE)
+
+                # Train Discriminator
+                if batch_idx % D_TRAIN_RATIO == 0:
+                    optimizer_D.zero_grad()
+
+                    # Add noise to images
+                    noisy_real_imgs = real_imgs + torch.randn_like(real_imgs) * NOISE_STD
+
+                    # Real images
+                    real_output = discriminator(noisy_real_imgs, tank_labels, view_labels)
+                    d_real_loss = criterion(real_output, real_labels)
+
+                    # Fake images
+                    noise = torch.randn(batch_size, LATENT_DIM, device=DEVICE)
+                    fake_imgs = generator(noise, tank_labels, view_labels)
+
+                    noisy_fake_imgs = fake_imgs.detach() + torch.randn_like(fake_imgs) * NOISE_STD
+                    fake_output = discriminator(noisy_fake_imgs, tank_labels, view_labels)
+                    d_fake_loss = criterion(fake_output, fake_labels)
+
+                    d_loss = d_real_loss + d_fake_loss
+                    d_loss.backward()
+                    optimizer_D.step()
+                else:
+                    noise = torch.randn(batch_size, LATENT_DIM, device=DEVICE)
+                    fake_imgs = generator(noise, tank_labels, view_labels)
+                    d_loss = torch.tensor(0.0)
+                    real_output = torch.tensor(0.0)
+                    fake_output = torch.tensor(0.0)
+
+                # Train Generator
+                optimizer_G.zero_grad()
+                fake_output_for_g = discriminator(fake_imgs, tank_labels, view_labels)
+                g_loss = criterion(fake_output_for_g, torch.ones(batch_size, 1, device=DEVICE))
+                g_loss.backward()
+                optimizer_G.step()
+
+                # Stats
+                if batch_idx % D_TRAIN_RATIO == 0:
+                    d_losses.append(d_loss.item())
+                    d_real_scores.append(real_output.mean().item())
+                    d_fake_scores.append(fake_output.mean().item())
+
+                g_losses.append(g_loss.item())
+
+                pbar.set_postfix({
+                    'D_loss': f'{d_loss.item():.4f}' if batch_idx % D_TRAIN_RATIO == 0 else 'skip',
+                    'G_loss': f'{g_loss.item():.4f}'
+                })
 
             batch_idx += 1
+
+            # Periodic CUDA cache clearing to prevent OOM during long epochs
+            if batch_idx % 200 == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        # Clear CUDA cache to prevent memory accumulation
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # Epoch summary
         epoch_time = time.time() - epoch_start
@@ -408,11 +532,20 @@ def train():
 
         print(f"\nEpoch {epoch+1}/{NUM_EPOCHS}")
         print(f"  D_loss: {avg_d_loss:.4f} | G_loss: {avg_g_loss:.4f}")
-        print(f"  D(real): {avg_d_real:.3f} | D(fake): {avg_d_fake:.3f}")
+
+        if USE_WGAN_GP:
+            avg_gp = sum(gp_losses)/len(gp_losses) if gp_losses else 0
+            # For WGAN, these are raw scores not probabilities
+            wasserstein_dist = avg_d_real - avg_d_fake
+            print(f"  Critic(real): {avg_d_real:.3f} | Critic(fake): {avg_d_fake:.3f}")
+            print(f"  Wasserstein Distance: {wasserstein_dist:.3f} | GP: {avg_gp:.3f}")
+        else:
+            print(f"  D(real): {avg_d_real:.3f} | D(fake): {avg_d_fake:.3f}")
+
         print(f"  Time: {epoch_time:.1f}s")
 
-        # Adaptive learning rate adjustment
-        if ADAPTIVE_LR and epoch > 0:  # Start adjusting after first epoch
+        # Adaptive learning rate adjustment (only for non-WGAN mode)
+        if ADAPTIVE_LR and not USE_WGAN_GP and epoch > 0:
             lr_adjusted = False
 
             # Check if discriminator is too strong
@@ -423,7 +556,7 @@ def train():
                     current_lr_d = new_lr_d
                     for param_group in optimizer_D.param_groups:
                         param_group['lr'] = current_lr_d
-                    print(f"  📉 Lowered LR_D to {current_lr_d:.6f} (discriminator too strong)")
+                    print(f"  Lowered LR_D to {current_lr_d:.6f} (discriminator too strong)")
                     lr_adjusted = True
 
             # Check if discriminator is too weak
@@ -434,19 +567,19 @@ def train():
                     current_lr_d = new_lr_d
                     for param_group in optimizer_D.param_groups:
                         param_group['lr'] = current_lr_d
-                    print(f"  📈 Raised LR_D to {current_lr_d:.6f} (discriminator too weak)")
+                    print(f"  Raised LR_D to {current_lr_d:.6f} (discriminator too weak)")
                     lr_adjusted = True
 
             if not lr_adjusted:
-                print(f"  ✅ LR_D stable at {current_lr_d:.6f} (balanced)")
+                print(f"  LR_D stable at {current_lr_d:.6f} (balanced)")
 
-        # Warning if discriminator is too strong
-        if avg_d_real > 0.95 and avg_d_fake < 0.05:
-            print(f"  ⚠️  WARNING: Discriminator very strong! D(real)={avg_d_real:.3f}, D(fake)={avg_d_fake:.3f}")
+        # Warnings (only relevant for BCE mode)
+        if not USE_WGAN_GP:
+            if avg_d_real > 0.95 and avg_d_fake < 0.05:
+                print(f"  WARNING: Discriminator very strong! D(real)={avg_d_real:.3f}, D(fake)={avg_d_fake:.3f}")
 
-        # Warning if generator loss is exploding
-        if avg_g_loss > 20:
-            print(f"  ⚠️  WARNING: Generator loss very high ({avg_g_loss:.1f})! Training may be unstable")
+            if avg_g_loss > 20:
+                print(f"  WARNING: Generator loss very high ({avg_g_loss:.1f})! Training may be unstable")
 
         # Save models
         save_model_chunked(generator, os.path.join(CHECKPOINT_DIR, 'latest_generator.pth'))
