@@ -1,0 +1,22 @@
+{
+  "tank_to_idx": {
+    "Leopard2": 0,
+    "M1A1_Abrams": 1,
+    "T90": 2
+  },
+  "idx_to_tank": {
+    "0": "Leopard2",
+    "1": "M1A1_Abrams",
+    "2": "T90"
+  },
+  "view_to_idx": {
+    "back": 0,
+    "front": 1,
+    "side": 2
+  },
+  "idx_to_view": {
+    "0": "back",
+    "1": "front",
+    "2": "side"
+  }
+}

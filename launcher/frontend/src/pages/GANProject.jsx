@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { ganAPI, annAPI, cnnAPI, nlpAPI, rnnAPI } from '../services/api'
-import { Sparkles, Download, RefreshCw, AlertCircle, Settings, Image as ImageIcon } from 'lucide-react'
+import { Sparkles, Download, RefreshCw, AlertCircle, Settings, Image as ImageIcon, BookOpen } from 'lucide-react'
 import { useModelManager } from '../hooks/useModelManager'
 
 export default function GANProject() {
@@ -378,7 +379,16 @@ export default function GANProject() {
             </div>
 
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h4 className="font-bold text-gray-800 mb-2">About the Model</h4>
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="font-bold text-gray-800">About the Model</h4>
+                <Link
+                  to="/gan/model"
+                  className="flex items-center text-amber-600 hover:text-amber-700 text-sm font-semibold"
+                >
+                  <BookOpen size={16} className="mr-1" />
+                  Learn More
+                </Link>
+              </div>
               <p className="text-gray-600 text-sm">
                 This is a <strong>Dual Conditional WGAN-GP</strong> (Wasserstein GAN with Gradient Penalty) that generates
                 200x200 RGB images. It uses <strong>self-attention mechanisms</strong> to capture long-range dependencies

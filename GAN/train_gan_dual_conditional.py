@@ -15,7 +15,8 @@ from models_dual_conditional import DualConditionalGenerator, DualConditionalDis
 BATCH_SIZE = 16
 LATENT_DIM = 100
 EMBED_DIM = 50
-NUM_EPOCHS = 200
+NUM_EPOCHS = 400
+RESUME_TRAINING = True  # Set to True to resume from last checkpoint
 LR_G = 0.00005  # Lower generator learning rate
 LR_D = 0.00005  # Same as generator for WGAN-GP
 BETA1 = 0.0  # WGAN-GP recommends beta1=0
@@ -147,6 +148,49 @@ class DualLabelTankDataset(Dataset):
         view_label = self.view_labels[idx]
 
         return image, tank_label, view_label
+
+
+def load_model_chunked(path):
+    """Load model from chunks if manifest exists, otherwise load directly"""
+    manifest_path = path + '.manifest.json'
+
+    if os.path.exists(manifest_path):
+        # Load from chunks
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+
+        state_dict = {}
+        base_dir = os.path.dirname(path)
+
+        for chunk_name in manifest['chunks']:
+            chunk_path = os.path.join(base_dir, chunk_name)
+            chunk_dict = torch.load(chunk_path, map_location='cpu')
+            state_dict.update(chunk_dict)
+
+        print(f"  [LOADED] {len(manifest['chunks'])} chunks from {os.path.basename(manifest_path)}")
+        return state_dict
+    elif os.path.exists(path):
+        # Load directly
+        print(f"  [LOADED] {os.path.basename(path)}")
+        return torch.load(path, map_location='cpu')
+    else:
+        return None
+
+
+def get_last_epoch():
+    """Find the last saved epoch by checking checkpoint files"""
+    last_epoch = 0
+
+    # Check for epoch checkpoints (saved every 10 epochs)
+    for filename in os.listdir(CHECKPOINT_DIR):
+        if filename.startswith('generator_epoch_') and filename.endswith('.pth'):
+            try:
+                epoch_num = int(filename.split('_')[2].split('.')[0])
+                last_epoch = max(last_epoch, epoch_num)
+            except (ValueError, IndexError):
+                pass
+
+    return last_epoch
 
 
 def save_model_chunked(model, path, chunk_size_mb=90):
@@ -324,9 +368,34 @@ def train():
         use_sigmoid=not USE_WGAN_GP  # No sigmoid for WGAN-GP
     ).to(DEVICE)
 
-    # Initialize weights
-    generator.apply(weights_init)
-    discriminator.apply(weights_init)
+    # Resume or initialize weights
+    start_epoch = 0
+    if RESUME_TRAINING:
+        last_epoch = get_last_epoch()
+        if last_epoch > 0:
+            print(f"\n  [RESUME] Found checkpoint at epoch {last_epoch}")
+
+            # Load generator
+            gen_path = os.path.join(CHECKPOINT_DIR, 'latest_generator.pth')
+            gen_state = load_model_chunked(gen_path)
+            if gen_state:
+                generator.load_state_dict(gen_state)
+
+            # Load discriminator
+            disc_path = os.path.join(CHECKPOINT_DIR, 'latest_discriminator.pth')
+            disc_state = load_model_chunked(disc_path)
+            if disc_state:
+                discriminator.load_state_dict(disc_state)
+
+            start_epoch = last_epoch
+            print(f"  [RESUME] Continuing from epoch {start_epoch + 1}")
+        else:
+            print("\n  [NEW] No checkpoint found, starting fresh")
+            generator.apply(weights_init)
+            discriminator.apply(weights_init)
+    else:
+        generator.apply(weights_init)
+        discriminator.apply(weights_init)
 
     # Optimizers - WGAN-GP uses different betas
     optimizer_G = optim.Adam(generator.parameters(), lr=LR_G, betas=(BETA1, BETA2))
@@ -364,7 +433,7 @@ def train():
         print(f"     LR_D range: {MIN_LR_D} to {MAX_LR_D}")
     print(f"{'='*60}\n")
 
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(start_epoch, NUM_EPOCHS):
         epoch_start = time.time()
 
         d_losses = []

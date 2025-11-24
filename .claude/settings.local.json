@@ -4,7 +4,10 @@
       "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" GAN/convert_existing_models.py)",
       "Bash(findstr:*)",
       "Bash(git add:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(dir:*)",
+      "Bash(nul)",
+      "Bash(wmic:*)"
     ],
     "deny": [],
     "ask": []
