@@ -115,6 +115,12 @@ export default function GANProject() {
     setSeed(Math.floor(Math.random() * 1000000).toString())
   }
 
+  const getReferenceImagePath = () => {
+    if (!selectedTank || !selectedView) return null
+    const filename = `${selectedTank}_${selectedView}_00000.png`
+    return `/gan_references/${filename}`
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -251,6 +257,24 @@ export default function GANProject() {
               </div>
             </div>
 
+            {/* Reference Image */}
+            {selectedTank && selectedView && (
+              <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-2">Training Reference</label>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <p className="text-xs text-gray-600 mb-2">Example from training data:</p>
+                  <img
+                    src={getReferenceImagePath()}
+                    alt={`Reference ${selectedTank} ${selectedView}`}
+                    className="w-full rounded-lg border-2 border-amber-300"
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Generate Button */}
             <button
               onClick={handleGenerate}
@@ -317,6 +341,36 @@ export default function GANProject() {
 
             {generatedImages.length > 0 ? (
               <div>
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                    <ImageIcon size={20} className="mr-2 text-amber-600" />
+                    Training Reference vs Generated
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 mb-2">Training Example:</p>
+                      <img
+                        src={getReferenceImagePath()}
+                        alt={`Reference ${selectedTank} ${selectedView}`}
+                        className="w-full rounded-lg border-2 border-amber-400"
+                      />
+                      <p className="text-xs text-gray-600 mt-2">
+                        This is what the model learned from during training
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 mb-2">First Generated Image:</p>
+                      <img
+                        src={`data:image/png;base64,${generatedImages[0].image_base64}`}
+                        alt={`Generated ${selectedTank} ${selectedView}`}
+                        className="w-full rounded-lg border-2 border-green-400"
+                      />
+                      <p className="text-xs text-gray-600 mt-2">
+                        AI-generated image based on learned features
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <p className="text-gray-600 mb-4">
                   Generated {generatedImages.length} images of <span className="font-bold">{selectedTank}</span> ({selectedView} view)
                 </p>
