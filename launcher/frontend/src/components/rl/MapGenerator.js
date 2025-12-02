@@ -30,7 +30,7 @@ export class MapGenerator {
     })
 
     // Generate floating platforms
-    let currentX = 350 // Start close to the starting platform (adjusted for new start position)
+    let currentX = 300 // Start at the edge of the starting platform
     let currentY = startHeight - 50 // Start at similar height
 
     for (let i = 0; i < 50; i++) {
@@ -39,8 +39,9 @@ export class MapGenerator {
       const platformHeight = this.tileSize
 
       // Position - smaller gaps, more reasonable
-      const gapX = this.randomInt(120, 250) // Jumpable distances
-      const gapY = this.randomInt(-100, 80) // Height variation
+      // First platform is guaranteed close, others are random
+      const gapX = i === 0 ? this.randomInt(100, 140) : this.randomInt(120, 250)
+      const gapY = i === 0 ? this.randomInt(-30, 20) : this.randomInt(-100, 80) // First platform has less height variation
 
       currentX += gapX
       currentY = Math.max(200, Math.min(this.height - 200, currentY + gapY))

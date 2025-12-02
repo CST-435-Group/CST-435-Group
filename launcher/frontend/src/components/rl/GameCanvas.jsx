@@ -34,25 +34,50 @@ export default function GameCanvas({ onGameEnd }) {
     game.map = mapGen.generateMap()
     game.player = new Player(game.map.spawn.x, game.map.spawn.y)
     game.cameraX = 0
+    game.jumpKeyWasPressed = false // Track if jump key was already pressed
 
-    // Keyboard controls
+    // Clear all keys helper
+    const clearAllKeys = () => {
+      game.keys = {}
+      game.jumpKeyWasPressed = false
+    }
+
+    // Keyboard controls - attach to canvas for better focus control
     const handleKeyDown = (e) => {
       // Prevent default for game keys first
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Shift', 'a', 'A', 'd', 'D', 'w', 'W', 's', 'S'].includes(e.key)) {
         e.preventDefault()
       }
 
-      game.keys[e.key] = true
+      // Only set to true if not already true (prevents key repeat)
+      if (!game.keys[e.key]) {
+        game.keys[e.key] = true
+      }
     }
 
     const handleKeyUp = (e) => {
-      // Explicitly set to false to prevent stuck keys
-      game.keys[e.key] = false
+      // Completely remove the key from the object
       delete game.keys[e.key]
+
+      // Reset jump flag when jump keys are released
+      if ([' ', 'ArrowUp', 'w', 'W'].includes(e.key)) {
+        game.jumpKeyWasPressed = false
+      }
     }
+
+    // Clear keys when window loses focus
+    const handleBlur = () => {
+      clearAllKeys()
+    }
+
+    // Ensure canvas is focusable
+    canvas.setAttribute('tabindex', '0')
+    canvas.focus()
 
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('blur', handleBlur)
+    canvas.addEventListener('blur', handleBlur)
 
     // Game loop
     const gameLoop = (timestamp) => {
@@ -85,6 +110,8 @@ export default function GameCanvas({ onGameEnd }) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', handleBlur)
+      canvas.removeEventListener('blur', handleBlur)
       if (game.animationFrame) {
         cancelAnimationFrame(game.animationFrame)
       }
@@ -96,23 +123,27 @@ export default function GameCanvas({ onGameEnd }) {
 
     if (!player.isAlive) return
 
-    // Handle input - check keys are actually pressed
+    // Handle input - always reset movement first
     player.stopMovement()
 
-    const leftPressed = keys['ArrowLeft'] === true || keys['a'] === true || keys['A'] === true
-    const rightPressed = keys['ArrowRight'] === true || keys['d'] === true || keys['D'] === true
-    const jumpPressed = keys[' '] === true || keys['ArrowUp'] === true || keys['w'] === true || keys['W'] === true
-    const sprintPressed = keys['Shift'] === true
-    const duckPressed = keys['ArrowDown'] === true || keys['s'] === true || keys['S'] === true
+    // Check which keys are currently pressed (must exist in keys object)
+    const leftPressed = ('ArrowLeft' in keys) || ('a' in keys) || ('A' in keys)
+    const rightPressed = ('ArrowRight' in keys) || ('d' in keys) || ('D' in keys)
+    const jumpPressed = (' ' in keys) || ('ArrowUp' in keys) || ('w' in keys) || ('W' in keys)
+    const sprintPressed = ('Shift' in keys)
+    const duckPressed = ('ArrowDown' in keys) || ('s' in keys) || ('S' in keys)
 
+    // Movement - only move if one direction is pressed
     if (leftPressed && !rightPressed) {
       player.moveLeft()
     } else if (rightPressed && !leftPressed) {
       player.moveRight()
     }
 
-    if (jumpPressed) {
+    // Jump - only jump once per key press (not continuous while held)
+    if (jumpPressed && !game.jumpKeyWasPressed) {
       player.jump()
+      game.jumpKeyWasPressed = true
     }
 
     player.sprint(sprintPressed)
