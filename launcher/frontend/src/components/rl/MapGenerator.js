@@ -19,31 +19,31 @@ export class MapGenerator {
     const coins = []
     const enemies = []
 
-    // Ground layer
-    const groundHeight = this.height - 100
+    // Starting platform - small and elevated
+    const startHeight = this.height - 400 // Much higher up
     platforms.push({
       x: 0,
-      y: groundHeight,
-      width: this.width * 3, // Long ground
-      height: 100,
+      y: startHeight,
+      width: 200, // Small starting platform
+      height: 40,
       type: 'ground'
     })
 
     // Generate floating platforms
-    let currentX = 150
-    let currentY = groundHeight - 100
+    let currentX = 250 // Start close to the starting platform
+    let currentY = startHeight - 50 // Start at similar height
 
     for (let i = 0; i < 50; i++) {
       // Platform dimensions
       const platformWidth = this.randomInt(3, 8) * this.tileSize
       const platformHeight = this.tileSize
 
-      // Position
-      const gapX = this.randomInt(100, 300)
-      const gapY = this.randomInt(-150, 50)
+      // Position - smaller gaps, more reasonable
+      const gapX = this.randomInt(120, 250) // Jumpable distances
+      const gapY = this.randomInt(-100, 80) // Height variation
 
       currentX += gapX
-      currentY = Math.max(200, Math.min(groundHeight - 200, currentY + gapY))
+      currentY = Math.max(200, Math.min(this.height - 200, currentY + gapY))
 
       platforms.push({
         x: currentX,
@@ -85,10 +85,10 @@ export class MapGenerator {
       height: 100
     }
 
-    // Spawn point
+    // Spawn point - on the starting platform
     const spawn = {
-      x: 100,
-      y: groundHeight - 100
+      x: 80,
+      y: startHeight - 60 // Above the starting platform
     }
 
     return {

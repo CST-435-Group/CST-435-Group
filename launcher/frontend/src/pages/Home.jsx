@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Brain, Camera, MessageSquare, MessageCircle, Dna, Sparkles, ArrowRight } from 'lucide-react'
+import { Brain, Camera, MessageSquare, MessageCircle, Dna, Sparkles, Gamepad2, ArrowRight } from 'lucide-react'
 import { docsAPI } from '../services/api'
 
 export default function Home() {
@@ -87,6 +87,20 @@ export default function Home() {
         'View angle selection (front, side, back)',
         'Model checkpoint selection',
         'Batch image generation'
+      ]
+    },
+    {
+      id: 'rl',
+      title: 'RL - Platformer Game',
+      description: 'Reinforcement Learning side-scrolling platformer where you race against a trained AI agent on procedurally generated levels',
+      icon: Gamepad2,
+      color: 'from-cyan-500 to-blue-700',
+      path: '/rl',
+      features: [
+        'Human vs AI racing',
+        'Procedurally generated levels',
+        'Visual-based RL agent',
+        'Real-time gameplay'
       ]
     }
   ]
