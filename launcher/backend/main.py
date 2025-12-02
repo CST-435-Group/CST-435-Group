@@ -32,9 +32,9 @@ app.add_middleware(
 
 # Import routers - support running from both root and backend directory
 try:
-    from routers import ann, cnn, nlp, rnn, docs
+    from routers import ann, cnn, nlp, rnn, docs, rl
 except ImportError:
-    from launcher.backend.routers import ann, cnn, nlp, rnn, docs
+    from launcher.backend.routers import ann, cnn, nlp, rnn, docs, rl
 
 # Lazy import GAN router from GAN project
 gan_router = None
@@ -88,6 +88,7 @@ app.include_router(ann.router, prefix="/api/ann", tags=["ANN - NBA Team Selectio
 app.include_router(cnn.router, prefix="/api/cnn", tags=["CNN - Fruit Classification"])
 app.include_router(nlp.router, prefix="/api/nlp", tags=["NLP - Sentiment Analysis"])
 app.include_router(rnn.router, prefix="/api/rnn", tags=["RNN - Text Generation"])
+app.include_router(rl.router, prefix="/api", tags=["RL - Platformer Game"])
 app.include_router(docs.router, prefix="/api/docs", tags=["Project Docs & Cost Reports"])
 
 # Include GAN router if available
@@ -119,6 +120,11 @@ async def root():
             "name": "Text Generation",
             "endpoint": "/api/rnn",
             "description": "LSTM-based recurrent neural network for next-word prediction"
+        },
+        "RL": {
+            "name": "Platformer Game - Human vs AI",
+            "endpoint": "/api/rl",
+            "description": "Reinforcement learning agent racing game with procedural generation"
         }
     }
 

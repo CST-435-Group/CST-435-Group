@@ -1,0 +1,102 @@
+.race-tracker {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  min-width: 400px;
+}
+
+.race-stats {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 20px;
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+}
+
+.progress-bars {
+  margin-top: 20px;
+}
+
+.progress-item {
+  margin-bottom: 15px;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 30px;
+  background: #e0e0e0;
+  border-radius: 15px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+}
+
+.progress-fill.human {
+  background: linear-gradient(90deg, #4CAF50, #45a049);
+}
+
+.progress-fill.ai {
+  background: linear-gradient(90deg, #f44336, #da190b);
+}
+
+.winner-banner {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 8px;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  animation: fadeIn 0.5s;
+}
+
+.winner-banner.human {
+  background: #4CAF50;
+  color: white;
+}
+
+.winner-banner.ai {
+  background: #f44336;
+  color: white;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

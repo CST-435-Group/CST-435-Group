@@ -12,6 +12,7 @@ const RNNProject = lazy(() => import('./pages/RNNProject'))
 const GAProject = lazy(() => import('./pages/GAProject'))
 const GANProject = lazy(() => import('./pages/GANProject'))
 const GANModelDetails = lazy(() => import('./pages/GANModelDetails'))
+const RLProject = lazy(() => import('./pages/RLProject'))
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/ga" element={<GAProject />} />
             <Route path="/gan" element={<GANProject />} />
             <Route path="/gan/model" element={<GANModelDetails />} />
+            <Route path="/rl" element={<RLProject />} />
           </Routes>
         </Suspense>
       </div>
