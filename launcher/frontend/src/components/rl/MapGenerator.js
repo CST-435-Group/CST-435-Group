@@ -22,7 +22,7 @@ export class MapGenerator {
     // Starting platform - small and elevated
     const startHeight = this.height - 400 // Much higher up
     platforms.push({
-      x: 0,
+      x: 100, // Moved right 100px
       y: startHeight,
       width: 200, // Small starting platform
       height: 40,
@@ -30,7 +30,7 @@ export class MapGenerator {
     })
 
     // Generate floating platforms
-    let currentX = 250 // Start close to the starting platform
+    let currentX = 350 // Start close to the starting platform (adjusted for new start position)
     let currentY = startHeight - 50 // Start at similar height
 
     for (let i = 0; i < 50; i++) {
@@ -87,7 +87,7 @@ export class MapGenerator {
 
     // Spawn point - on the starting platform
     const spawn = {
-      x: 80,
+      x: 180, // Adjusted for new platform position
       y: startHeight - 60 // Above the starting platform
     }
 
