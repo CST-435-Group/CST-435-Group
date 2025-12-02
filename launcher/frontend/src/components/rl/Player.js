@@ -85,7 +85,8 @@ export class Player {
   }
 
   jump() {
-    if (this.isOnGround) {
+    // Only jump if on ground and not already jumping
+    if (this.isOnGround && this.velocityY >= 0) {
       this.velocityY = -this.jumpPower
       this.isOnGround = false
     }

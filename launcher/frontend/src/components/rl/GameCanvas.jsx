@@ -37,16 +37,18 @@ export default function GameCanvas({ onGameEnd }) {
 
     // Keyboard controls
     const handleKeyDown = (e) => {
-      game.keys[e.key] = true
-
-      // Prevent default for game keys
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Shift'].includes(e.key)) {
+      // Prevent default for game keys first
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Shift', 'a', 'A', 'd', 'D', 'w', 'W', 's', 'S'].includes(e.key)) {
         e.preventDefault()
       }
+
+      game.keys[e.key] = true
     }
 
     const handleKeyUp = (e) => {
+      // Explicitly set to false to prevent stuck keys
       game.keys[e.key] = false
+      delete game.keys[e.key]
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -94,21 +96,27 @@ export default function GameCanvas({ onGameEnd }) {
 
     if (!player.isAlive) return
 
-    // Handle input
+    // Handle input - check keys are actually pressed
     player.stopMovement()
 
-    if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+    const leftPressed = keys['ArrowLeft'] === true || keys['a'] === true || keys['A'] === true
+    const rightPressed = keys['ArrowRight'] === true || keys['d'] === true || keys['D'] === true
+    const jumpPressed = keys[' '] === true || keys['ArrowUp'] === true || keys['w'] === true || keys['W'] === true
+    const sprintPressed = keys['Shift'] === true
+    const duckPressed = keys['ArrowDown'] === true || keys['s'] === true || keys['S'] === true
+
+    if (leftPressed && !rightPressed) {
       player.moveLeft()
-    }
-    if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+    } else if (rightPressed && !leftPressed) {
       player.moveRight()
     }
-    if (keys[' '] || keys['ArrowUp'] || keys['w'] || keys['W']) {
+
+    if (jumpPressed) {
       player.jump()
     }
 
-    player.sprint(keys['Shift'])
-    player.duck(keys['ArrowDown'] || keys['s'] || keys['S'])
+    player.sprint(sprintPressed)
+    player.duck(duckPressed)
 
     // Update player physics
     player.update(map.platforms, 1)

@@ -20,7 +20,7 @@ export class MapGenerator {
     const enemies = []
 
     // Starting platform - small and elevated
-    const startHeight = this.height - 400 // Much higher up
+    const startHeight = this.height - 500 // Even higher up (moved up 100px)
     platforms.push({
       x: 100, // Moved right 100px
       y: startHeight,
