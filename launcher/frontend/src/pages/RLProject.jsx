@@ -82,8 +82,8 @@ function RLProject() {
 
       {/* Main Content */}
       <div className="rl-content">
-        {false && !status?.tfjs_model_exists ? ( {/* Disabled model check for single player */}
-          // Model not trained - show setup instructions
+        {/* Disabled model check for single player - always show game */}
+        {false ? (
           <div className="setup-instructions">
             <h2>🤖 Setup Required</h2>
             <p>The AI agent hasn't been trained yet. Follow these steps:</p>
