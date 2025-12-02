@@ -1,16 +1,16 @@
 """
 Procedural Map Generator for Side-Scrolling Platformer
-Generates flowing, playable levels using smart algorithms (Perlin noise, cellular automata, etc.)
+Python translation of launcher/frontend/src/components/rl/MapGenerator.js
 """
 
-import numpy as np
 import random
+import time
 
 
 class MapGenerator:
     """
     Generates random but playable platformer levels.
-    Ensures maps flow well and are always completable.
+    Direct translation from JavaScript version.
     """
 
     def __init__(self, width=1920, height=1080, tile_size=32, difficulty=1.0):
@@ -21,128 +21,192 @@ class MapGenerator:
             width: Width of the map in pixels
             height: Height of the map in pixels
             tile_size: Size of each tile (32x32 pixels)
-            difficulty: Difficulty level (0.5 = easy, 1.0 = normal, 2.0 = hard)
+            difficulty: Difficulty level (not currently used, kept for future)
         """
-        pass
+        self.width = width
+        self.height = height
+        self.tile_size = tile_size
+        self.difficulty = difficulty
+        self.seed = int(time.time() * 1000)  # Milliseconds like Date.now()
 
-    def generate_map(self, length=200):
+    def generate_map(self, seed=None):
         """
         Generate a complete level.
+        Exact translation of JavaScript MapGenerator.generateMap()
 
         Args:
-            length: Length of the level in tiles
+            seed: Random seed for reproducibility
 
         Returns:
             dict: Map data containing:
                 - platforms: List of platform dictionaries
-                - enemies: List of enemy spawn positions
-                - coins: List of coin positions
-                - goal: Goal position (x, y)
-                - spawn: Player spawn position (x, y)
+                - coins: List of coin dictionaries
+                - enemies: List of enemy dictionaries
+                - goal: Goal dictionary
+                - spawn: Spawn position dictionary
+                - width: Total map width
+                - height: Total map height
         """
-        pass
+        if seed is not None:
+            self.seed = seed
+            random.seed(seed)
 
-    def _generate_ground_layer(self, length):
+        length = 200  # tiles (not currently used)
+        platforms = []
+        coins = []
+        enemies = []
+
+        # Starting platform - small and elevated
+        start_height = self.height - 500  # Even higher up (moved up 100px)
+        platforms.append({
+            'x': 100,  # Moved right 100px
+            'y': start_height,
+            'width': 200,  # Small starting platform
+            'height': 40,
+            'type': 'ground'
+        })
+
+        # Generate floating platforms
+        current_x = 300  # Start at the edge of the starting platform
+        current_y = start_height - 50  # Start at similar height
+
+        for i in range(50):
+            # Platform dimensions
+            platform_width = self.random_int(3, 8) * self.tile_size
+            platform_height = self.tile_size
+
+            # Position - smaller gaps, more reasonable
+            # First platform is guaranteed close, others are random
+            if i == 0:
+                gap_x = self.random_int(100, 140)
+                gap_y = self.random_int(-30, 20)  # First platform has less height variation
+            else:
+                gap_x = self.random_int(120, 250)
+                gap_y = self.random_int(-100, 80)
+
+            current_x += gap_x
+            current_y = max(200, min(self.height - 200, current_y + gap_y))
+
+            # Check for overlap with existing platforms
+            platform_overlaps = False
+            attempts = 0
+            max_attempts = 10
+
+            while True:
+                platform_overlaps = False
+
+                for existing_platform in platforms:
+                    if self.check_overlap(
+                        {'x': current_x, 'y': current_y, 'width': platform_width, 'height': platform_height},
+                        existing_platform
+                    ):
+                        platform_overlaps = True
+                        # Try adjusting position
+                        current_y += self.random_int(-50, 50)
+                        current_y = max(200, min(self.height - 200, current_y))
+                        break
+
+                attempts += 1
+                if not (platform_overlaps and attempts < max_attempts):
+                    break
+
+            # Only add platform if no overlap found
+            if not platform_overlaps:
+                new_platform = {
+                    'x': current_x,
+                    'y': current_y,
+                    'width': platform_width,
+                    'height': platform_height,
+                    'type': 'platform'
+                }
+                platforms.append(new_platform)
+
+                # Add coins on some platforms
+                if random.random() < 0.4:
+                    coin_x = current_x + platform_width / 2
+                    coin_y = current_y - 40
+
+                    coins.append({
+                        'x': coin_x,
+                        'y': coin_y,
+                        'radius': 15,
+                        'collected': False
+                    })
+
+                # Add enemies on some platforms (but not on same spot as coins)
+                if random.random() < 0.2 and i > 5:
+                    enemy_x = current_x + self.random_int(20, platform_width - 52)  # Random position on platform
+                    enemy_y = current_y - 40
+
+                    # Check if coin exists at similar position
+                    coin_too_close = any(
+                        abs(coin['x'] - enemy_x) < 50 and abs(coin['y'] - enemy_y) < 50
+                        for coin in coins
+                    )
+
+                    if not coin_too_close:
+                        enemies.append({
+                            'x': enemy_x,
+                            'y': enemy_y,
+                            'width': 32,
+                            'height': 32,
+                            'type': 'walker',
+                            'direction': 1,
+                            'speed': 2
+                        })
+
+        # Goal at the end
+        goal = {
+            'x': current_x + 200,
+            'y': current_y - 100,
+            'width': 50,
+            'height': 100
+        }
+
+        # Spawn point - on the starting platform
+        spawn = {
+            'x': 180,  # Adjusted for new platform position
+            'y': start_height - 60  # Above the starting platform
+        }
+
+        return {
+            'platforms': platforms,
+            'coins': coins,
+            'enemies': enemies,
+            'goal': goal,
+            'spawn': spawn,
+            'width': current_x + 500,
+            'height': self.height
+        }
+
+    def random_int(self, min_val, max_val):
         """
-        Generate base ground layer with hills and valleys.
-        Uses Perlin noise or similar for smooth terrain.
+        Generate random integer (inclusive).
+        Matches JavaScript's Math.floor(Math.random() * (max - min + 1)) + min
 
         Args:
-            length: Length in tiles
+            min_val: Minimum value (inclusive)
+            max_val: Maximum value (inclusive)
 
         Returns:
-            list: Ground heights for each x position
+            int: Random integer in range [min_val, max_val]
         """
-        pass
+        return random.randint(min_val, max_val)
 
-    def _generate_platforms(self, ground_heights, length):
+    def check_overlap(self, rect1, rect2):
         """
-        Generate floating platforms above ground.
-        Ensures platforms are reachable by jumping.
+        Check if two rectangles overlap (AABB collision).
 
         Args:
-            ground_heights: List of ground heights
-            length: Level length
+            rect1: Dictionary with x, y, width, height
+            rect2: Dictionary with x, y, width, height
 
         Returns:
-            list: Platform dictionaries with x, y, width, height
+            bool: True if rectangles overlap
         """
-        pass
-
-    def _place_obstacles(self, platforms):
-        """
-        Place enemies and hazards on platforms.
-        Uses smart placement to ensure fair difficulty.
-
-        Args:
-            platforms: List of platform dictionaries
-
-        Returns:
-            list: Enemy dictionaries with x, y, type
-        """
-        pass
-
-    def _place_collectibles(self, platforms):
-        """
-        Place coins and power-ups.
-        Rewards exploration and risky jumps.
-
-        Args:
-            platforms: List of platforms
-
-        Returns:
-            list: Coin/collectible dictionaries with x, y, type
-        """
-        pass
-
-    def _ensure_playability(self, map_data):
-        """
-        Verify map is completable.
-        Checks that goal is reachable from spawn.
-        Adjusts platforms if needed.
-
-        Args:
-            map_data: Generated map dictionary
-
-        Returns:
-            dict: Verified and adjusted map data
-        """
-        pass
-
-    def _calculate_jump_reach(self, from_pos, jump_height=150, jump_distance=200):
-        """
-        Calculate what positions are reachable from a given position.
-        Used to ensure platform spacing is valid.
-
-        Args:
-            from_pos: (x, y) starting position
-            jump_height: Maximum jump height in pixels
-            jump_distance: Maximum horizontal jump distance
-
-        Returns:
-            list: Reachable (x, y) positions
-        """
-        pass
-
-
-class PerlinNoise:
-    """
-    Perlin noise generator for smooth terrain generation.
-    """
-
-    def __init__(self, seed=None):
-        """Initialize Perlin noise with optional seed for reproducibility."""
-        pass
-
-    def noise(self, x, y=0):
-        """
-        Generate Perlin noise value at position (x, y).
-
-        Args:
-            x: X coordinate
-            y: Y coordinate (optional, for 2D noise)
-
-        Returns:
-            float: Noise value between -1 and 1
-        """
-        pass
+        return (
+            rect1['x'] < rect2['x'] + rect2['width'] and
+            rect1['x'] + rect1['width'] > rect2['x'] and
+            rect1['y'] < rect2['y'] + rect2['height'] and
+            rect1['y'] + rect1['height'] > rect2['y']
+        )

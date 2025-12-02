@@ -6,6 +6,12 @@ The AI agent receives visual input (pixels or grid) and learns to navigate rando
 import gym
 from gym import spaces
 import numpy as np
+import pygame
+import os
+import time
+
+from map_generator import MapGenerator
+from player import Player
 
 
 class PlatformerEnv(gym.Env):
@@ -14,7 +20,9 @@ class PlatformerEnv(gym.Env):
     Agent receives visual observation of the game state.
     """
 
-    def __init__(self, render_width=1920, render_height=1080, observation_width=84, observation_height=84):
+    def __init__(self, render_width=1920, render_height=1080,
+                 observation_width=84, observation_height=84,
+                 headless=True, capture_frames=False, reward_weights=None):
         """
         Initialize the environment.
 
@@ -23,42 +31,247 @@ class PlatformerEnv(gym.Env):
             render_height: Height of full game rendering (1080 for 1080p)
             observation_width: Width of observation for AI (smaller for performance)
             observation_height: Height of observation for AI
+            headless: If True, use dummy video driver (faster, no window)
+            capture_frames: If True, save frames for visualization
+            reward_weights: Dictionary of reward weights (progress, coin, enemy, goal, death)
         """
         super(PlatformerEnv, self).__init__()
-        pass
+
+        # Set headless mode for training (no GUI window)
+        if headless:
+            os.environ['SDL_VIDEODRIVER'] = 'dummy'
+
+        # Initialize Pygame
+        pygame.init()
+
+        # Dimensions
+        self.render_width = render_width
+        self.render_height = render_height
+        self.observation_width = observation_width
+        self.observation_height = observation_height
+
+        # Create surfaces: full resolution for capture, small for AI observation
+        self.display_surface = pygame.Surface((render_width, render_height))
+        self.observation_surface = pygame.Surface((observation_width, observation_height))
+
+        # Observation space: 84x84x3 RGB image
+        self.observation_space = spaces.Box(
+            low=0, high=255,
+            shape=(observation_height, observation_width, 3),
+            dtype=np.uint8
+        )
+
+        # Action space: 6 discrete actions
+        # 0=idle, 1=left, 2=right, 3=jump, 4=sprint+right, 5=duck
+        self.action_space = spaces.Discrete(6)
+
+        # Game components
+        self.map_generator = MapGenerator(render_width, render_height)
+        self.player = None
+        self.map_data = None
+        self.camera_x = 0
+
+        # Episode tracking
+        self.steps = 0
+        self.max_steps = 5000  # Timeout per episode
+        self.last_x = 0  # For progress reward
+        self.done = False
+
+        # Frame capture
+        self.capture_frames = capture_frames
+        self.frame_buffer = []
+
+        # Reward weights (can be configured)
+        self.reward_weights = reward_weights or {
+            'progress': 0.1,
+            'coin': 10.0,
+            'enemy': 50.0,
+            'goal': 1000.0,
+            'death': -100.0,
+            'time': -0.01
+        }
+
+        # Initialize first episode
+        self.reset()
 
     def reset(self):
         """
         Reset environment and generate new random map.
 
         Returns:
-            observation: Visual observation of initial state
+            observation: Visual observation of initial state (84x84x3 numpy array)
         """
-        pass
+        # Generate new random map
+        self.map_data = self.map_generator.generate_map()
+
+        # Create player at spawn point
+        spawn = self.map_data['spawn']
+        self.player = Player(spawn['x'], spawn['y'])
+
+        # Reset tracking variables
+        self.steps = 0
+        self.last_x = self.player.x
+        self.camera_x = 0
+        self.done = False
+
+        # Clear frame buffer
+        if self.capture_frames:
+            self.frame_buffer = []
+
+        # Return initial observation
+        return self._get_observation()
 
     def step(self, action):
         """
         Execute one time step within the environment.
 
         Args:
-            action: Integer representing action (0-5: left, right, jump, sprint, duck, idle)
+            action: Integer representing action
+                0 = idle
+                1 = left
+                2 = right
+                3 = jump
+                4 = sprint + right
+                5 = duck
 
         Returns:
-            observation: Visual observation after action
+            observation: Visual observation after action (84x84x3)
             reward: Reward for this step
             done: Whether episode is finished
-            info: Additional information (distance traveled, etc.)
+            info: Additional information dictionary
         """
-        pass
+        if self.done:
+            # Episode already finished, return current state
+            return self._get_observation(), 0.0, True, {}
 
-    def render(self, mode='human'):
+        # Apply action to player
+        self.player.stopMovement()
+
+        if action == 1:  # Left
+            self.player.moveLeft()
+        elif action == 2:  # Right
+            self.player.moveRight()
+        elif action == 3:  # Jump
+            self.player.jump()
+        elif action == 4:  # Sprint + Right
+            self.player.sprint(True)
+            self.player.moveRight()
+        elif action == 5:  # Duck
+            self.player.duck(True)
+        # action == 0 is idle (do nothing)
+
+        # Update player physics
+        self.player.update(self.map_data['platforms'])
+
+        # Update camera (smooth follow)
+        target_camera_x = self.player.x - 400
+        self.camera_x += (target_camera_x - self.camera_x) * 0.1
+
+        # Check coin collection
+        for coin in self.map_data['coins']:
+            self.player.collectCoin(coin)
+
+        # Update enemies and check collisions
+        self._update_enemies()
+
+        # Check if player reached goal
+        if self.player.checkGoalReached(self.map_data['goal']):
+            self.done = True
+
+        # Check if player died
+        if not self.player.isAlive:
+            self.done = True
+
+        # Increment step counter
+        self.steps += 1
+
+        # Check timeout
+        if self.steps >= self.max_steps:
+            self.done = True
+
+        # Calculate reward
+        reward = self._calculate_reward()
+
+        # Get observation
+        observation = self._get_observation()
+
+        # Build info dictionary
+        info = {
+            'episode_length': self.steps,
+            'distance': self.player.distance,
+            'score': self.player.score,
+            'goal_reached': self.player.checkGoalReached(self.map_data['goal']),
+            'died': not self.player.isAlive
+        }
+
+        return observation, reward, self.done, info
+
+    def render(self, mode='rgb_array'):
         """
-        Render the environment (for training visualization).
+        Render the environment.
 
         Args:
-            mode: 'human' for pygame window, 'rgb_array' for returning pixel data
+            mode: 'rgb_array' for numpy array, 'human' for display (not used in headless)
+
+        Returns:
+            numpy array if mode='rgb_array', None otherwise
         """
-        pass
+        # Clear surface
+        self.display_surface.fill((135, 206, 235))  # Sky blue
+
+        # Draw platforms
+        for platform in self.map_data['platforms']:
+            color = (139, 69, 19) if platform['type'] == 'ground' else (46, 139, 87)
+            pygame.draw.rect(
+                self.display_surface,
+                color,
+                (platform['x'] - self.camera_x, platform['y'],
+                 platform['width'], platform['height'])
+            )
+
+        # Draw coins
+        for coin in self.map_data['coins']:
+            if not coin.get('collected', False):
+                pygame.draw.circle(
+                    self.display_surface,
+                    (255, 215, 0),  # Gold
+                    (int(coin['x'] - self.camera_x), int(coin['y'])),
+                    coin['radius']
+                )
+
+        # Draw enemies
+        for enemy in self.map_data['enemies']:
+            pygame.draw.rect(
+                self.display_surface,
+                (255, 0, 255),  # Magenta
+                (enemy['x'] - self.camera_x, enemy['y'],
+                 enemy['width'], enemy['height'])
+            )
+
+        # Draw goal
+        goal = self.map_data['goal']
+        pygame.draw.rect(
+            self.display_surface,
+            (0, 255, 0),  # Green
+            (goal['x'] - self.camera_x, goal['y'],
+             goal['width'], goal['height'])
+        )
+
+        # Draw player
+        pygame.draw.rect(
+            self.display_surface,
+            (255, 255, 255),  # White
+            (self.player.x - self.camera_x, self.player.y,
+             self.player.width, self.player.height)
+        )
+
+        if mode == 'rgb_array':
+            # Convert surface to numpy array
+            # Pygame uses (width, height, 3), we need (height, width, 3)
+            return np.transpose(
+                pygame.surfarray.array3d(self.display_surface),
+                axes=(1, 0, 2)
+            )
 
     def _get_observation(self):
         """
@@ -66,48 +279,98 @@ class PlatformerEnv(gym.Env):
         Returns a downscaled version of the game screen.
 
         Returns:
-            numpy array of shape (observation_height, observation_width, channels)
+            numpy array of shape (84, 84, 3)
         """
-        pass
+        # Render full resolution
+        rgb_array = self.render(mode='rgb_array')
+
+        # Downscale to observation size using pygame
+        # Convert numpy to surface
+        temp_surface = pygame.surfarray.make_surface(
+            np.transpose(rgb_array, axes=(1, 0, 2))
+        )
+
+        # Scale down
+        pygame.transform.smoothscale(
+            temp_surface,
+            (self.observation_width, self.observation_height),
+            self.observation_surface
+        )
+
+        # Convert back to numpy
+        obs = np.transpose(
+            pygame.surfarray.array3d(self.observation_surface),
+            axes=(1, 0, 2)
+        )
+
+        return obs.astype(np.uint8)
 
     def _calculate_reward(self):
         """
         Calculate reward for current state.
-        Rewards:
-            +1 for moving right (progress)
-            +10 for collecting coins
-            +50 for defeating enemies
-            +1000 for reaching goal
-            -100 for dying
-            -1 for standing still
 
         Returns:
             float: Reward value
         """
-        pass
+        reward = 0.0
 
-    def _check_collision(self, rect1, rect2):
-        """
-        Check if two rectangles collide.
+        # Progress reward (encourage moving right)
+        distance_delta = self.player.x - self.last_x
+        reward += distance_delta * self.reward_weights['progress']
+        self.last_x = self.player.x
 
-        Args:
-            rect1: Dictionary with 'x', 'y', 'width', 'height'
-            rect2: Dictionary with 'x', 'y', 'width', 'height'
+        # Coin collection (score tracks this)
+        # Coins add 10 to score when collected
+        # We give reward based on score change
 
-        Returns:
-            bool: True if collision detected
-        """
-        pass
+        # Time penalty (encourage efficiency)
+        reward += self.reward_weights['time']
 
-    def _apply_physics(self):
+        # Goal reached (big reward)
+        if self.player.checkGoalReached(self.map_data['goal']):
+            reward += self.reward_weights['goal']
+
+        # Death penalty
+        if not self.player.isAlive:
+            reward += self.reward_weights['death']
+
+        return reward
+
+    def _update_enemies(self):
         """
-        Apply physics (gravity, velocity) to player.
-        Updates player position based on velocity and checks ground collision.
+        Update enemy positions and check collisions.
         """
-        pass
+        for enemy in self.map_data['enemies']:
+            # Move enemy
+            enemy['x'] += enemy['direction'] * enemy['speed']
+
+            # Simple AI: turn around at platform edges
+            on_platform = None
+            for platform in self.map_data['platforms']:
+                if (enemy['x'] >= platform['x'] and
+                    enemy['x'] <= platform['x'] + platform['width'] and
+                    abs(enemy['y'] + enemy['height'] - platform['y']) < 5):
+                    on_platform = platform
+                    break
+
+            if not on_platform or enemy['x'] < 0:
+                enemy['direction'] *= -1
+
+            # Check collision with player
+            if self.player.checkEnemyCollision(enemy):
+                self.player.die()
 
     def close(self):
         """
-        Clean up resources (close pygame window, etc.)
+        Clean up resources.
         """
-        pass
+        pygame.quit()
+
+    def save_frame(self, filename):
+        """
+        Save current frame as PNG for visualization.
+
+        Args:
+            filename: Path to save PNG file
+        """
+        pygame.image.save(self.display_surface, filename)
