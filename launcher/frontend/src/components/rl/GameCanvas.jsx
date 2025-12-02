@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MapGenerator } from './MapGenerator'
 import { Player } from './Player'
 import './GameCanvas.css'
@@ -9,6 +10,7 @@ import './GameCanvas.css'
  */
 export default function GameCanvas({ onGameEnd }) {
   const canvasRef = useRef(null)
+  const navigate = useNavigate()
   const [gameState, setGameState] = useState('playing') // playing, won, lost
   const [stats, setStats] = useState({ score: 0, distance: 0 })
 
@@ -271,10 +273,14 @@ export default function GameCanvas({ onGameEnd }) {
     ctx.fillText('Shift: Sprint', canvas.width - 290, 75)
   }
 
-  const handleRestart = () => {
-    setGameState('playing')
-    // Reload component to restart game
-    window.location.reload()
+  const handlePlayAgain = () => {
+    // Go back to intro screen to start a new game
+    onGameEnd()
+  }
+
+  const handleBackToHome = () => {
+    // Navigate to home page
+    navigate('/')
   }
 
   return (
@@ -295,10 +301,10 @@ export default function GameCanvas({ onGameEnd }) {
               <p>Distance: <strong>{stats.distance}m</strong></p>
             </div>
             <div className="game-buttons">
-              <button onClick={handleRestart} className="restart-btn">
+              <button onClick={handlePlayAgain} className="restart-btn">
                 🔄 Play Again
               </button>
-              <button onClick={onGameEnd} className="menu-btn">
+              <button onClick={handleBackToHome} className="menu-btn">
                 🏠 Back to Menu
               </button>
             </div>
