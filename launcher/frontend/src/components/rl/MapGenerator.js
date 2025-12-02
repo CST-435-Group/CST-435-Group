@@ -45,35 +45,76 @@ export class MapGenerator {
       currentX += gapX
       currentY = Math.max(200, Math.min(this.height - 200, currentY + gapY))
 
-      platforms.push({
-        x: currentX,
-        y: currentY,
-        width: platformWidth,
-        height: platformHeight,
-        type: 'platform'
-      })
+      // Check for overlap with existing platforms
+      let platformOverlaps = false
+      let attempts = 0
+      const maxAttempts = 10
 
-      // Add coins on some platforms
-      if (Math.random() < 0.4) {
-        coins.push({
-          x: currentX + platformWidth / 2,
-          y: currentY - 40,
-          radius: 15,
-          collected: false
-        })
-      }
+      do {
+        platformOverlaps = false
 
-      // Add enemies on some platforms
-      if (Math.random() < 0.2 && i > 5) {
-        enemies.push({
-          x: currentX + platformWidth / 2,
-          y: currentY - 40,
-          width: 32,
-          height: 32,
-          type: 'walker',
-          direction: 1,
-          speed: 2
-        })
+        for (const existingPlatform of platforms) {
+          if (this.checkOverlap(
+            { x: currentX, y: currentY, width: platformWidth, height: platformHeight },
+            existingPlatform
+          )) {
+            platformOverlaps = true
+            // Try adjusting position
+            currentY += this.randomInt(-50, 50)
+            currentY = Math.max(200, Math.min(this.height - 200, currentY))
+            break
+          }
+        }
+
+        attempts++
+      } while (platformOverlaps && attempts < maxAttempts)
+
+      // Only add platform if no overlap found
+      if (!platformOverlaps) {
+        const newPlatform = {
+          x: currentX,
+          y: currentY,
+          width: platformWidth,
+          height: platformHeight,
+          type: 'platform'
+        }
+        platforms.push(newPlatform)
+
+        // Add coins on some platforms
+        if (Math.random() < 0.4) {
+          const coinX = currentX + platformWidth / 2
+          const coinY = currentY - 40
+
+          coins.push({
+            x: coinX,
+            y: coinY,
+            radius: 15,
+            collected: false
+          })
+        }
+
+        // Add enemies on some platforms (but not on same spot as coins)
+        if (Math.random() < 0.2 && i > 5) {
+          const enemyX = currentX + this.randomInt(20, platformWidth - 52) // Random position on platform
+          const enemyY = currentY - 40
+
+          // Check if coin exists at similar position
+          const coinTooClose = coins.some(coin =>
+            Math.abs(coin.x - enemyX) < 50 && Math.abs(coin.y - enemyY) < 50
+          )
+
+          if (!coinTooClose) {
+            enemies.push({
+              x: enemyX,
+              y: enemyY,
+              width: 32,
+              height: 32,
+              type: 'walker',
+              direction: 1,
+              speed: 2
+            })
+          }
+        }
       }
     }
 
@@ -104,5 +145,15 @@ export class MapGenerator {
 
   randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min
+  }
+
+  checkOverlap(rect1, rect2) {
+    // Check if two rectangles overlap
+    return (
+      rect1.x < rect2.x + rect2.width &&
+      rect1.x + rect1.width > rect2.x &&
+      rect1.y < rect2.y + rect2.height &&
+      rect1.y + rect1.height > rect2.y
+    )
   }
 }
