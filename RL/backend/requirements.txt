@@ -7,8 +7,9 @@ pygame>=2.5.0
 
 # Model Export
 onnx>=1.14.0
-tf2onnx>=1.15.0
+onnx-tf>=1.10.0
 tensorflow>=2.13.0
+tensorflowjs>=4.10.0
 
 # Utilities
 matplotlib>=3.7.0
