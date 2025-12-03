@@ -12,6 +12,18 @@ function RLProject() {
   const [loading, setLoading] = useState(true)
   const [gameStarted, setGameStarted] = useState(false)
   const [activeTab, setActiveTab] = useState('game') // 'game' or 'training'
+  const [isTrainingAuthenticated, setIsTrainingAuthenticated] = useState(false)
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+
+  const TRAINING_PASSWORD = 'John117@home'
+
+  // Check authentication on mount
+  useEffect(() => {
+    const authenticated = sessionStorage.getItem('rl_training_auth') === 'true'
+    setIsTrainingAuthenticated(authenticated)
+  }, [])
 
   // Check backend status on mount
   useEffect(() => {
@@ -38,6 +50,36 @@ function RLProject() {
   const resetGame = () => {
     setGameStarted(false)
     // TODO: Reset game state
+  }
+
+  const handleTrainingTabClick = () => {
+    if (!isTrainingAuthenticated) {
+      setShowPasswordPrompt(true)
+      setPasswordInput('')
+      setPasswordError('')
+    } else {
+      setActiveTab('training')
+    }
+  }
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault()
+    if (passwordInput === TRAINING_PASSWORD) {
+      setIsTrainingAuthenticated(true)
+      sessionStorage.setItem('rl_training_auth', 'true')
+      setShowPasswordPrompt(false)
+      setActiveTab('training')
+      setPasswordError('')
+    } else {
+      setPasswordError('Incorrect password. Access denied.')
+      setPasswordInput('')
+    }
+  }
+
+  const handlePasswordCancel = () => {
+    setShowPasswordPrompt(false)
+    setPasswordInput('')
+    setPasswordError('')
   }
 
   if (loading) {
@@ -92,11 +134,40 @@ function RLProject() {
         </button>
         <button
           className={`tab-button ${activeTab === 'training' ? 'active' : ''}`}
-          onClick={() => setActiveTab('training')}
+          onClick={handleTrainingTabClick}
         >
-          🧠 Train AI
+          🧠 Train AI {!isTrainingAuthenticated && '🔒'}
         </button>
       </div>
+
+      {/* Password Prompt Modal */}
+      {showPasswordPrompt && (
+        <div className="password-modal-overlay" onClick={handlePasswordCancel}>
+          <div className="password-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>🔒 Training Access Required</h3>
+            <p>Enter password to access AI training controls</p>
+            <form onSubmit={handlePasswordSubmit}>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Enter password"
+                autoFocus
+                className="password-input"
+              />
+              {passwordError && <div className="password-error">{passwordError}</div>}
+              <div className="password-actions">
+                <button type="submit" className="password-submit-btn">
+                  Unlock
+                </button>
+                <button type="button" onClick={handlePasswordCancel} className="password-cancel-btn">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="rl-content">
