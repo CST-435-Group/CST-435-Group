@@ -4,13 +4,17 @@ Uses Stable-Baselines3 to train agent on randomly generated levels
 Automatically uses GPU if available via PyTorch CUDA
 """
 
+# IMPORTANT: Set SDL to headless mode BEFORE importing pygame or environment
+import os
+os.environ['SDL_VIDEODRIVER'] = 'dummy'  # Headless mode for training
+os.environ['SDL_AUDIODRIVER'] = 'dummy'  # No audio needed
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback, BaseCallback
 from environment import PlatformerEnv
 import torch
 import argparse
-import os
 import json
 import time
 import numpy as np
