@@ -174,11 +174,12 @@ def start_training(timesteps: int = 1000000):
         python_cmd = sys.executable
 
         # Start process in background
+        # Use DEVNULL instead of PIPE to avoid Windows asyncio connection errors
         training_process = subprocess.Popen(
             [python_cmd, str(train_script), "--timesteps", str(timesteps)],
             cwd=str(RL_BACKEND_PATH / "training"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
         )
 
@@ -261,56 +262,73 @@ async def stream_training_status():
 
         try:
             while True:
-                # Check if training process is still alive
-                global training_process, training_pid
-                is_process_alive = False
-                if training_process and training_process.poll() is None:
-                    is_process_alive = True
-                elif training_pid:
-                    try:
-                        os.kill(training_pid, 0)
+                try:
+                    # Check if training process is still alive
+                    global training_process, training_pid
+                    is_process_alive = False
+                    if training_process and training_process.poll() is None:
                         is_process_alive = True
-                    except (OSError, ProcessLookupError):
-                        is_process_alive = False
+                    elif training_pid:
+                        try:
+                            os.kill(training_pid, 0)
+                            is_process_alive = True
+                        except (OSError, ProcessLookupError):
+                            is_process_alive = False
 
-                # Read status file
-                if status_file.exists():
-                    try:
-                        with open(status_file, 'r') as f:
-                            status = json.load(f)
-                            status['process_alive'] = is_process_alive
-                            status['pid'] = training_pid
+                    # Read status file
+                    if status_file.exists():
+                        try:
+                            with open(status_file, 'r') as f:
+                                status = json.load(f)
+                                status['process_alive'] = is_process_alive
+                                status['pid'] = training_pid
 
-                            # Only send if status changed
-                            if status != last_status:
-                                yield f"data: {json.dumps(status)}\n\n"
-                                last_status = status
-                                no_file_count = 0
+                                # Only send if status changed
+                                if status != last_status:
+                                    yield f"data: {json.dumps(status)}\n\n"
+                                    last_status = status
+                                    no_file_count = 0
 
-                    except Exception as e:
-                        yield f"data: {json.dumps({'error': f'Failed to read status: {str(e)}', 'process_alive': is_process_alive})}\n\n"
-                else:
-                    no_file_count += 1
-                    # Send a waiting message every 5 seconds if no status file
-                    if no_file_count % 5 == 0:
-                        yield f"data: {json.dumps({'is_training': is_process_alive, 'message': 'Waiting for training to start...', 'process_alive': is_process_alive})}\n\n"
+                        except Exception as e:
+                            yield f"data: {json.dumps({'error': f'Failed to read status: {str(e)}', 'process_alive': is_process_alive})}\n\n"
+                    else:
+                        no_file_count += 1
+                        # Send a waiting message every 5 seconds if no status file
+                        if no_file_count % 5 == 0:
+                            yield f"data: {json.dumps({'is_training': is_process_alive, 'message': 'Waiting for training to start...', 'process_alive': is_process_alive})}\n\n"
 
-                # If process died and no more updates, break
-                if not is_process_alive and last_status and last_status.get('is_training') == False:
-                    yield f"data: {json.dumps({'is_training': False, 'message': 'Training completed', 'process_alive': False})}\n\n"
+                    # If process died and no more updates, break
+                    if not is_process_alive and last_status and last_status.get('is_training') == False:
+                        yield f"data: {json.dumps({'is_training': False, 'message': 'Training completed', 'process_alive': False})}\n\n"
+                        break
+
+                    await asyncio.sleep(1)  # Update every second
+
+                except (asyncio.CancelledError, GeneratorExit):
+                    # Client disconnected - exit gracefully
                     break
+                except Exception as e:
+                    # Log other errors but continue
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                    await asyncio.sleep(1)
 
-                await asyncio.sleep(1)  # Update every second
-
+        except (asyncio.CancelledError, GeneratorExit, ConnectionResetError):
+            # Client disconnected - exit gracefully without error
+            pass
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            # Log unexpected errors
+            try:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            except:
+                pass
 
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive"
         }
     )
 
