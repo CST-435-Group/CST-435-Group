@@ -61,9 +61,10 @@ class PlatformerEnv(gym.Env):
             dtype=np.uint8
         )
 
-        # Action space: 6 discrete actions
+        # Action space: 9 discrete actions
         # 0=idle, 1=left, 2=right, 3=jump, 4=sprint+right, 5=duck
-        self.action_space = spaces.Discrete(6)
+        # 6=jump+left, 7=jump+right, 8=sprint+jump+right
+        self.action_space = spaces.Discrete(9)
 
         # Game components
         self.map_generator = MapGenerator(render_width, render_height)
@@ -140,9 +141,12 @@ class PlatformerEnv(gym.Env):
                 0 = idle
                 1 = left
                 2 = right
-                3 = jump
+                3 = jump (straight up)
                 4 = sprint + right
                 5 = duck
+                6 = jump + left
+                7 = jump + right
+                8 = sprint + jump + right
 
         Returns:
             observation: Visual observation after action (84x84x3)
@@ -162,13 +166,23 @@ class PlatformerEnv(gym.Env):
             self.player.moveLeft()
         elif action == 2:  # Right
             self.player.moveRight()
-        elif action == 3:  # Jump
+        elif action == 3:  # Jump (straight up)
             self.player.jump()
         elif action == 4:  # Sprint + Right
             self.player.sprint(True)
             self.player.moveRight()
         elif action == 5:  # Duck
             self.player.duck(True)
+        elif action == 6:  # Jump + Left
+            self.player.jump()
+            self.player.moveLeft()
+        elif action == 7:  # Jump + Right
+            self.player.jump()
+            self.player.moveRight()
+        elif action == 8:  # Sprint + Jump + Right
+            self.player.sprint(True)
+            self.player.jump()
+            self.player.moveRight()
         # action == 0 is idle (do nothing)
 
         # Update player physics

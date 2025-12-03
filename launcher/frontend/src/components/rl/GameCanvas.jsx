@@ -269,7 +269,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
           case 2: // Right
             aiPlayer.moveRight()
             break
-          case 3: // Jump
+          case 3: // Jump (straight up)
             aiPlayer.jump()
             break
           case 4: // Sprint + Right
@@ -278,6 +278,19 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
             break
           case 5: // Duck
             aiPlayer.duck(true)
+            break
+          case 6: // Jump + Left
+            aiPlayer.jump()
+            aiPlayer.moveLeft()
+            break
+          case 7: // Jump + Right
+            aiPlayer.jump()
+            aiPlayer.moveRight()
+            break
+          case 8: // Sprint + Jump + Right
+            aiPlayer.sprint(true)
+            aiPlayer.jump()
+            aiPlayer.moveRight()
             break
           default: // Idle
             break
