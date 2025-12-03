@@ -134,9 +134,9 @@ class ProgressCallback(BaseCallback):
     Writes status.json and captures frames for intelligent visualization.
     """
 
-    def __init__(self, status_file="training/status.json",
-                 frame_dir="training/frames",
-                 log_file="training/training.log",
+    def __init__(self, status_file="status.json",
+                 frame_dir="frames",
+                 log_file="training.log",
                  save_freq=10, frame_save_freq=100,
                  verbose=0):
         super(ProgressCallback, self).__init__(verbose)
@@ -151,7 +151,9 @@ class ProgressCallback(BaseCallback):
         self.best_reward = -float('inf')
 
         # Create directories
-        os.makedirs(os.path.dirname(status_file), exist_ok=True)
+        status_dir = os.path.dirname(status_file)
+        if status_dir:  # Only create if there's a directory component
+            os.makedirs(status_dir, exist_ok=True)
         os.makedirs(frame_dir, exist_ok=True)
 
     def _on_step(self) -> bool:
@@ -328,9 +330,9 @@ def setup_callbacks(save_freq=10000):
     """
     # Progress tracking callback
     progress_callback = ProgressCallback(
-        status_file="training/status.json",
-        frame_dir="training/frames",
-        log_file="training/training.log",
+        status_file="status.json",
+        frame_dir="frames",
+        log_file="training.log",
         save_freq=10,
         frame_save_freq=100,
         verbose=1
@@ -339,7 +341,7 @@ def setup_callbacks(save_freq=10000):
     # Checkpoint callback - save model periodically
     checkpoint_callback = CheckpointCallback(
         save_freq=save_freq,
-        save_path='training/checkpoints/',
+        save_path='checkpoints/',
         name_prefix='checkpoint',
         verbose=1
     )
