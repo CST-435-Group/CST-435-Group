@@ -126,6 +126,28 @@ def train_agent(total_timesteps=1_000_000, save_path="models/platformer_agent"):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     model.save(save_path)
 
+    # Update status.json to mark training as complete
+    status_file = "status.json"
+    try:
+        # Read current status if it exists
+        if os.path.exists(status_file):
+            with open(status_file, 'r') as f:
+                status = json.load(f)
+        else:
+            status = {}
+
+        # Mark as complete
+        status['is_training'] = False
+        status['completed'] = True
+        status['completed_at'] = time.time()
+        status['message'] = 'Training completed successfully'
+
+        # Write updated status
+        with open(status_file, 'w') as f:
+            json.dump(status, f, indent=2)
+    except Exception as e:
+        print(f"[WARNING] Failed to update status.json: {e}")
+
     print(f"\n[SUCCESS] Training complete!")
     print(f"[SUCCESS] Model saved to: {save_path}.zip")
 
@@ -240,18 +262,29 @@ class ProgressCallback(BaseCallback):
         Intelligent frame skipping logic.
         Save frames for:
         - First 10 episodes (for debugging)
-        - Every 100th episode
+        - Every 10th episode (more frequent for visibility)
         - New best reward
-        - Reward > 80% of best (interesting episodes)
+        - Episodes close to best reward (within 20%)
         """
         if episode_num <= 10:
             return True
-        if episode_num % self.frame_save_freq == 0:
+        if episode_num % 10 == 0:  # Every 10th episode instead of 100th
             return True
         if episode_reward >= self.best_reward:
             return True
-        if self.best_reward > 0 and episode_reward >= self.best_reward * 0.8:
-            return True
+
+        # For negative rewards (early training), save if within 20% of best
+        # For positive rewards, save if >= 80% of best
+        if self.best_reward < 0:
+            # Negative rewards: save if episode is within 20% of best (closer to 0)
+            threshold = self.best_reward * 0.8  # -50 * 0.8 = -40 (better)
+            if episode_reward >= threshold:
+                return True
+        elif self.best_reward > 0:
+            # Positive rewards: save if >= 80% of best
+            if episode_reward >= self.best_reward * 0.8:
+                return True
+
         return False
 
 
