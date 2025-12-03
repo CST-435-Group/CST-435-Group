@@ -3,8 +3,8 @@ Custom Gym Environment for Side-Scrolling Platformer
 The AI agent receives visual input (pixels or grid) and learns to navigate randomly generated levels
 """
 
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 import pygame
 import os
