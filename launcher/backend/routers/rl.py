@@ -77,6 +77,33 @@ def rl_info():
     }
 
 
+@router.get("/debug/paths", summary="Debug Path Detection")
+def debug_paths():
+    """Debug endpoint to show path detection"""
+    file_path = Path(__file__)
+    possible_paths = [
+        Path(__file__).parent.parent.parent.parent / "RL" / "backend",
+        Path(__file__).parent.parent.parent / "RL" / "backend",
+    ]
+
+    return {
+        "current_file": str(file_path),
+        "parent": str(file_path.parent),
+        "parent.parent": str(file_path.parent.parent),
+        "parent.parent.parent": str(file_path.parent.parent.parent),
+        "parent.parent.parent.parent": str(file_path.parent.parent.parent.parent),
+        "RL_BACKEND_PATH": str(RL_BACKEND_PATH) if RL_BACKEND_PATH else None,
+        "RL_BACKEND_PATH_exists": RL_BACKEND_PATH.exists() if RL_BACKEND_PATH else False,
+        "possible_paths_checked": [
+            {
+                "path": str(p),
+                "exists": p.exists()
+            }
+            for p in possible_paths
+        ]
+    }
+
+
 @router.get("/status", summary="Check RL Status")
 def check_status():
     """Check if RL backend is available and model exists"""
