@@ -176,6 +176,9 @@ class ProgressCallback(BaseCallback):
         self.episode_lengths = []
         self.best_reward = -float('inf')
 
+        # Frame buffer to store last frame before episode ends
+        self.last_frame = None
+
         # Create directories
         status_dir = os.path.dirname(status_file)
         if status_dir:  # Only create if there's a directory component
@@ -184,6 +187,17 @@ class ProgressCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         """Called at every environment step"""
+
+        # Capture current frame BEFORE episode ends (so we see the final state)
+        # This will be saved if the episode ends on this step
+        try:
+            env = self.training_env.envs[0]
+            while hasattr(env, 'env'):
+                env = env.env
+            self.last_frame = env.render(mode='rgb_array')
+        except Exception as e:
+            if self.verbose > 0:
+                print(f"[FRAME] Error capturing frame: {e}")
 
         # Update status file every N steps
         if self.num_timesteps % self.save_freq == 0:
@@ -228,25 +242,14 @@ class ProgressCallback(BaseCallback):
                     ep_reward
                 )
 
-                if should_save:
-                    # Capture frame from environment
+                if should_save and self.last_frame is not None:
+                    # Save the buffered frame (captured BEFORE episode ended)
                     try:
                         frame_filename = f"{self.frame_dir}/episode_{len(self.episode_rewards):05d}_reward_{int(ep_reward)}.png"
 
-                        # Get the unwrapped environment to access render()
-                        # self.training_env is the VecEnv
-                        env = self.training_env.envs[0]
-
-                        # Get the base environment (unwrap Monitor wrapper)
-                        while hasattr(env, 'env'):
-                            env = env.env
-
-                        # Render the current state
-                        frame = env.render(mode='rgb_array')
-
-                        # Save frame as PNG using pygame
+                        # Use the buffered frame (shows player right before death/goal)
                         import pygame
-                        surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
+                        surface = pygame.surfarray.make_surface(self.last_frame.swapaxes(0, 1))
                         pygame.image.save(surface, frame_filename)
 
                         if self.verbose > 0:
