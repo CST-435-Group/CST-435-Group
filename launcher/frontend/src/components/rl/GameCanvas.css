@@ -63,6 +63,78 @@
   font-size: 1.5rem;
 }
 
+/* AI vs Human Race Stats */
+.final-stats-race {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  margin: 20px 0;
+  padding: 20px;
+  background: #f5f5f5;
+  border-radius: 10px;
+}
+
+.player-stats {
+  flex: 1;
+  padding: 15px;
+  border-radius: 8px;
+  transition: transform 0.3s;
+}
+
+.player-stats:hover {
+  transform: scale(1.05);
+}
+
+.human-stats {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.1));
+  border: 2px solid #4CAF50;
+}
+
+.ai-stats {
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.2), rgba(255, 107, 107, 0.1));
+  border: 2px solid #FF6B6B;
+}
+
+.player-stats h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.player-stats p {
+  font-size: 1.1rem;
+  margin: 8px 0;
+  color: #666;
+}
+
+.player-stats strong {
+  color: #333;
+  font-size: 1.3rem;
+}
+
+.player-stats .winner {
+  color: #FFD700;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-top: 10px;
+  animation: pulse 1s infinite;
+}
+
+.vs-divider {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #999;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
 .game-buttons {
   display: flex;
   gap: 15px;

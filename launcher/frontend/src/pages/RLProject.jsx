@@ -11,6 +11,7 @@ function RLProject() {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [gameStarted, setGameStarted] = useState(false)
+  const [enableAI, setEnableAI] = useState(false)
   const [activeTab, setActiveTab] = useState('game') // 'game' or 'training'
   const [isTrainingAuthenticated, setIsTrainingAuthenticated] = useState(false)
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
@@ -271,8 +272,29 @@ function RLProject() {
                   </div>
                 </div>
 
+                {/* AI Mode Toggle */}
+                {status?.tfjs_model_exists && (
+                  <div className="ai-mode-toggle">
+                    <label className="toggle-container">
+                      <input
+                        type="checkbox"
+                        checked={enableAI}
+                        onChange={(e) => setEnableAI(e.target.checked)}
+                      />
+                      <span className="toggle-label">
+                        🤖 Race against AI {enableAI ? '(Enabled)' : '(Disabled)'}
+                      </span>
+                    </label>
+                    <p className="toggle-hint">
+                      {enableAI
+                        ? 'You will race against a trained AI opponent!'
+                        : 'Play solo or enable AI for a competitive race'}
+                    </p>
+                  </div>
+                )}
+
                 <button className="start-button" onClick={startGame}>
-                  🎮 Start Race
+                  {enableAI ? '🏁 Start Race vs AI' : '🎮 Start Solo Game'}
                 </button>
 
                 <div className="features">
@@ -308,7 +330,7 @@ function RLProject() {
               </div>
             ) : (
               <div className="game-container">
-                <GameCanvas onGameEnd={resetGame} />
+                <GameCanvas onGameEnd={resetGame} enableAI={enableAI} />
               </div>
             )}
           </div>
