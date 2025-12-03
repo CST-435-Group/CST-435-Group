@@ -94,15 +94,24 @@ class PlatformerEnv(gym.Env):
         # Initialize first episode
         self.reset()
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
         """
         Reset environment and generate new random map.
 
+        Args:
+            seed: Random seed for map generation
+            options: Optional reset options (not used)
+
         Returns:
             observation: Visual observation of initial state (84x84x3 numpy array)
+            info: Additional information dictionary
         """
+        # Set seed if provided
+        if seed is not None:
+            np.random.seed(seed)
+
         # Generate new random map
-        self.map_data = self.map_generator.generate_map()
+        self.map_data = self.map_generator.generate_map(seed=seed)
 
         # Create player at spawn point
         spawn = self.map_data['spawn']
@@ -118,8 +127,9 @@ class PlatformerEnv(gym.Env):
         if self.capture_frames:
             self.frame_buffer = []
 
-        # Return initial observation
-        return self._get_observation()
+        # Return initial observation and info
+        info = {}
+        return self._get_observation(), info
 
     def step(self, action):
         """
@@ -137,12 +147,13 @@ class PlatformerEnv(gym.Env):
         Returns:
             observation: Visual observation after action (84x84x3)
             reward: Reward for this step
-            done: Whether episode is finished
+            terminated: Whether episode ended naturally (goal/death)
+            truncated: Whether episode was cut off (time limit)
             info: Additional information dictionary
         """
         if self.done:
             # Episode already finished, return current state
-            return self._get_observation(), 0.0, True, {}
+            return self._get_observation(), 0.0, True, False, {}
 
         # Apply action to player
         self.player.stopMovement()
@@ -174,12 +185,18 @@ class PlatformerEnv(gym.Env):
         # Update enemies and check collisions
         self._update_enemies()
 
+        # Track episode termination
+        terminated = False
+        truncated = False
+
         # Check if player reached goal
         if self.player.checkGoalReached(self.map_data['goal']):
+            terminated = True
             self.done = True
 
         # Check if player died
         if not self.player.isAlive:
+            terminated = True
             self.done = True
 
         # Increment step counter
@@ -187,6 +204,7 @@ class PlatformerEnv(gym.Env):
 
         # Check timeout
         if self.steps >= self.max_steps:
+            truncated = True
             self.done = True
 
         # Calculate reward
@@ -204,7 +222,7 @@ class PlatformerEnv(gym.Env):
             'died': not self.player.isAlive
         }
 
-        return observation, reward, self.done, info
+        return observation, reward, terminated, truncated, info
 
     def render(self, mode='rgb_array'):
         """

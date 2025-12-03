@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Training artifacts
+training/models/
+training/checkpoints/
+training/frames/
+training/logs/
+training/status.json
+training/training/
+logs/
+
+# Model files
+models/*.zip
+models/*.pt
+models/*.pth
+models/tfjs_model/
+models/onnx_model/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

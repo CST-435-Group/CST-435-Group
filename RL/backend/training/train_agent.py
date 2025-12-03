@@ -81,7 +81,7 @@ def train_agent(total_timesteps=1_000_000, save_path="models/platformer_agent"):
     # Create PPO model with GPU support
     # policy_kwargs can be customized for deeper networks
     policy_kwargs = dict(
-        net_arch=[dict(pi=[256, 256], vf=[256, 256])]  # Larger networks for complex visual input
+        net_arch=dict(pi=[256, 256], vf=[256, 256])  # Larger networks for complex visual input
     )
 
     model = PPO(
@@ -255,7 +255,8 @@ def evaluate_agent(model, num_episodes=10):
 
         while not done:
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = env.step(action)
+            obs, reward, dones, info = env.step(action)
+            done = dones[0]
             episode_reward += reward[0]
             steps += 1
 
@@ -295,7 +296,8 @@ def visualize_agent(model, num_episodes=5):
 
         while not done:
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = env.step(action)
+            obs, reward, dones, info = env.step(action)
+            done = dones[0]
             episode_reward += reward[0]
 
             if done:
