@@ -133,6 +133,23 @@ export const ganAPI = {
   unload: () => api.post('/gan/unload'),
 }
 
+// RL API calls
+export const rlAPI = {
+  getInfo: () => api.get('/rl/'),
+  getStatus: () => api.get('/rl/status'),
+  getGpuInfo: () => api.get('/rl/gpu/info'),
+  getModelInfo: () => api.get('/rl/model/info'),
+  exportModel: () => api.post('/rl/model/export'),
+  startTraining: (params) => api.post('/rl/training/start', null, { params }),
+  stopTraining: () => api.post('/rl/training/stop'),
+  getTrainingStatus: () => api.get('/rl/training/status'),
+  getTrainingLogs: (lines = 100) => api.get(`/rl/training/logs?lines=${lines}`),
+  getTrainingFrames: (limit = 10) => api.get(`/rl/training/frames?limit=${limit}`),
+  getTrainingFrame: (filename) => `${API_URL}/rl/training/frame/${filename}`,
+  // SSE stream endpoint - use raw fetch since it's not JSON
+  streamTrainingStatus: () => `${API_URL}/rl/training/stream`,
+}
+
 // General API calls
 export const generalAPI = {
   getRoot: () => api.get('/'),

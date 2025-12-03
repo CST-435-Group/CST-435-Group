@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { rlAPI } from '../../services/api'
 import './FrameViewer.css'
 
 /**
@@ -15,8 +16,8 @@ function FrameViewer({ isTraining }) {
   const fetchFrames = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/rl/training/frames?limit=20')
-      const data = await response.json()
+      const response = await rlAPI.getTrainingFrames(20)
+      const data = response.data
       if (data.frames) {
         setFrames(data.frames)
         // Auto-select the latest frame if none selected
@@ -50,7 +51,8 @@ function FrameViewer({ isTraining }) {
   }
 
   const getFrameUrl = (frame) => {
-    return `http://localhost:8000/api/rl${frame.url}?t=${Date.now()}`
+    const filename = frame.url.split('/').pop()
+    return `${rlAPI.getTrainingFrame(filename)}?t=${Date.now()}`
   }
 
   return (

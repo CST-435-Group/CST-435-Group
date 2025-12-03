@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { rlAPI } from '../../services/api'
 import './LogViewer.css'
 
 /**
@@ -17,8 +18,8 @@ function LogViewer({ isTraining }) {
   const fetchLogs = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/rl/training/logs?lines=100')
-      const data = await response.json()
+      const response = await rlAPI.getTrainingLogs(100)
+      const data = response.data
 
       if (data.logs) {
         setLogs(data.logs)

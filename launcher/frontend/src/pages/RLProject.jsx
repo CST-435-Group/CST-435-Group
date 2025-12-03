@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import GameCanvas from '../components/rl/GameCanvas'
 import TrainingDashboard from '../components/rl/TrainingDashboard'
+import { rlAPI } from '../services/api'
 import './RLProject.css'
 
 /**
@@ -33,9 +34,8 @@ function RLProject() {
 
   const checkStatus = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/rl/status')
-      const data = await response.json()
-      setStatus(data)
+      const response = await rlAPI.getStatus()
+      setStatus(response.data)
     } catch (error) {
       console.error('Failed to fetch RL status:', error)
       setStatus({ error: 'Backend not available' })

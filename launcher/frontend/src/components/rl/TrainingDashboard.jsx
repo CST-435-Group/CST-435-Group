@@ -3,6 +3,7 @@ import TrainingControls from './TrainingControls'
 import MetricsChart from './MetricsChart'
 import FrameViewer from './FrameViewer'
 import LogViewer from './LogViewer'
+import { rlAPI } from '../../services/api'
 import './TrainingDashboard.css'
 
 /**
@@ -21,8 +22,8 @@ function TrainingDashboard({ status }) {
 
     const fetchStatus = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/rl/training/status')
-        const data = await response.json()
+        const response = await rlAPI.getTrainingStatus()
+        const data = response.data
         setTrainingStatus(data)
         setIsTraining(data.is_training && data.process_alive)
       } catch (error) {
@@ -32,7 +33,7 @@ function TrainingDashboard({ status }) {
 
     if (useSSE && isTraining) {
       // Use Server-Sent Events for real-time updates
-      eventSource = new EventSource('http://localhost:8000/api/rl/training/stream')
+      eventSource = new EventSource(rlAPI.streamTrainingStatus())
 
       eventSource.onmessage = (event) => {
         try {
@@ -67,40 +68,28 @@ function TrainingDashboard({ status }) {
 
   const handleTrainingStart = async (params) => {
     try {
-      const response = await fetch('http://localhost:8000/api/rl/training/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setIsTraining(true)
-        setUseSSE(true)
-        console.log('Training started:', data)
-      } else {
-        alert(`Failed to start training: ${data.detail}`)
-      }
+      const response = await rlAPI.startTraining(params)
+      const data = response.data
+      setIsTraining(true)
+      setUseSSE(true)
+      console.log('Training started:', data)
     } catch (error) {
       console.error('Failed to start training:', error)
-      alert(`Failed to start training: ${error.message}`)
+      const errorMsg = error.response?.data?.detail || error.message
+      alert(`Failed to start training: ${errorMsg}`)
     }
   }
 
   const handleTrainingStop = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/rl/training/stop', {
-        method: 'POST'
-      })
-      const data = await response.json()
-      if (response.ok) {
-        setIsTraining(false)
-        console.log('Training stopped:', data)
-      } else {
-        alert(`Failed to stop training: ${data.detail}`)
-      }
+      const response = await rlAPI.stopTraining()
+      const data = response.data
+      setIsTraining(false)
+      console.log('Training stopped:', data)
     } catch (error) {
       console.error('Failed to stop training:', error)
-      alert(`Failed to stop training: ${error.message}`)
+      const errorMsg = error.response?.data?.detail || error.message
+      alert(`Failed to stop training: ${errorMsg}`)
     }
   }
 
