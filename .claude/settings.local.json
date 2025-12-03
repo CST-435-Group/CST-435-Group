@@ -13,7 +13,14 @@
       "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" status \"GAN/backend/gan_router.py\" \"GAN/train_gan_dual_conditional.py\")",
       "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" diff --name-status)",
       "Bash(git -C \"C:\\Users\\Soren\\OneDrive\\Documents\\GitHub\\CST-435-Group\" status --porcelain \"GAN/\")",
-      "Bash(git -C:*)"
+      "Bash(git -C:*)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(mkdir:*)",
+      "Bash(git rm:*)",
+      "Bash(\"C:\\Users\\Soren\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" train_agent.py --timesteps 10000)"
     ],
     "deny": [],
     "ask": []
