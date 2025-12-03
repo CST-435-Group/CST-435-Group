@@ -11,6 +11,7 @@ os.environ['SDL_AUDIODRIVER'] = 'dummy'  # No audio needed
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback, BaseCallback
 from environment import PlatformerEnv
 import torch
@@ -50,6 +51,9 @@ def create_env():
         headless=True,  # No GUI window for training
         capture_frames=False  # Frame capture handled by callback
     )
+
+    # Wrap with Monitor to track episode statistics (CRITICAL for reward tracking)
+    env = Monitor(env, filename=None)
 
     # Wrap in DummyVecEnv for Stable-Baselines3 compatibility
     env = DummyVecEnv([lambda: env])
