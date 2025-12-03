@@ -210,10 +210,25 @@ class ProgressCallback(BaseCallback):
                     # Capture frame from environment
                     try:
                         frame_filename = f"{self.frame_dir}/episode_{len(self.episode_rewards):05d}_reward_{int(ep_reward)}.png"
-                        # Note: Frame capture would need environment access
-                        # For now, just log that we would save
+
+                        # Get the unwrapped environment to access render()
+                        # self.training_env is the VecEnv
+                        env = self.training_env.envs[0]
+
+                        # Get the base environment (unwrap Monitor wrapper)
+                        while hasattr(env, 'env'):
+                            env = env.env
+
+                        # Render the current state
+                        frame = env.render(mode='rgb_array')
+
+                        # Save frame as PNG using pygame
+                        import pygame
+                        surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
+                        pygame.image.save(surface, frame_filename)
+
                         if self.verbose > 0:
-                            print(f"[FRAME] Would save frame: {frame_filename}")
+                            print(f"[FRAME] Saved: {frame_filename}")
                     except Exception as e:
                         if self.verbose > 0:
                             print(f"[FRAME] Error saving frame: {e}")
