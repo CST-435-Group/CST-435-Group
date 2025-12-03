@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import GameCanvas from '../components/rl/GameCanvas'
+import TrainingDashboard from '../components/rl/TrainingDashboard'
 import './RLProject.css'
 
 /**
  * RL Platformer Project Page
- * Human vs AI racing game with procedurally generated levels
+ * Human vs AI racing game with procedurally generated levels + AI Training UI
  */
 function RLProject() {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [gameStarted, setGameStarted] = useState(false)
+  const [activeTab, setActiveTab] = useState('game') // 'game' or 'training'
 
   // Check backend status on mount
   useEffect(() => {
@@ -80,10 +82,29 @@ function RLProject() {
         </div>
       )}
 
+      {/* Tab Navigation */}
+      <div className="tab-navigation">
+        <button
+          className={`tab-button ${activeTab === 'game' ? 'active' : ''}`}
+          onClick={() => setActiveTab('game')}
+        >
+          🎮 Play Game
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'training' ? 'active' : ''}`}
+          onClick={() => setActiveTab('training')}
+        >
+          🧠 Train AI
+        </button>
+      </div>
+
       {/* Main Content */}
       <div className="rl-content">
-        {/* Disabled model check for single player - always show game */}
-        {false ? (
+        {/* Game Tab */}
+        {activeTab === 'game' && (
+          <>
+            {/* Disabled model check for single player - always show game */}
+            {false ? (
           <div className="setup-instructions">
             <h2>🤖 Setup Required</h2>
             <p>The AI agent hasn't been trained yet. Follow these steps:</p>
@@ -221,45 +242,52 @@ function RLProject() {
             )}
           </div>
         )}
-      </div>
 
-      {/* Project Info */}
-      <div className="project-info">
-        <h3>🤔 How It Works</h3>
-        <div className="info-grid">
-          <div className="info-card">
-            <h4>Training Phase</h4>
-            <p>
-              The AI learns by playing thousands of randomly generated levels.
-              It receives rewards for progress, collecting coins, and reaching the goal.
-              Over time, it learns optimal strategies for jumping, timing, and navigation.
-            </p>
-          </div>
-          <div className="info-card">
-            <h4>Visual Input</h4>
-            <p>
-              Unlike traditional game AI with direct access to game state, this agent
-              sees the game as pixels (84x84 grayscale image). It must learn to recognize
-              platforms, enemies, and coins purely from visual observation.
-            </p>
-          </div>
-          <div className="info-card">
-            <h4>Browser Inference</h4>
-            <p>
-              The trained PyTorch model is converted to TensorFlow.js and runs entirely
-              in your browser. This means zero latency - the AI makes decisions at 60+ FPS
-              without any network calls to a server.
-            </p>
-          </div>
-          <div className="info-card">
-            <h4>Procedural Maps</h4>
-            <p>
-              Levels are generated using Perlin noise for smooth terrain and smart algorithms
-              that ensure all platforms are reachable. The AI never sees the same level twice
-              during training, so it learns general platforming skills, not memorization.
-            </p>
-          </div>
-        </div>
+            {/* Project Info */}
+            <div className="project-info">
+              <h3>🤔 How It Works</h3>
+              <div className="info-grid">
+                <div className="info-card">
+                  <h4>Training Phase</h4>
+                  <p>
+                    The AI learns by playing thousands of randomly generated levels.
+                    It receives rewards for progress, collecting coins, and reaching the goal.
+                    Over time, it learns optimal strategies for jumping, timing, and navigation.
+                  </p>
+                </div>
+                <div className="info-card">
+                  <h4>Visual Input</h4>
+                  <p>
+                    Unlike traditional game AI with direct access to game state, this agent
+                    sees the game as pixels (84x84 grayscale image). It must learn to recognize
+                    platforms, enemies, and coins purely from visual observation.
+                  </p>
+                </div>
+                <div className="info-card">
+                  <h4>Browser Inference</h4>
+                  <p>
+                    The trained PyTorch model is converted to TensorFlow.js and runs entirely
+                    in your browser. This means zero latency - the AI makes decisions at 60+ FPS
+                    without any network calls to a server.
+                  </p>
+                </div>
+                <div className="info-card">
+                  <h4>Procedural Maps</h4>
+                  <p>
+                    Levels are generated using Perlin noise for smooth terrain and smart algorithms
+                    that ensure all platforms are reachable. The AI never sees the same level twice
+                    during training, so it learns general platforming skills, not memorization.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Training Tab */}
+        {activeTab === 'training' && (
+          <TrainingDashboard status={status} />
+        )}
       </div>
     </div>
   )
