@@ -9,14 +9,30 @@ import './GameCanvas.css'
  * Main game canvas component
  * Handles rendering, input, and game loop
  * @param {boolean} enableAI - Enable AI opponent
- * @param {string} modelPath - Path to AI model
+ * @param {string} episodeModelPath - Path to episode-specific AI model (optional)
+ * @param {number} playingEpisode - Episode number being played against (optional)
+ * @param {function} onGameComplete - Callback when game completes with time and stats
  */
-export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/models/rl/tfjs_model/model.json' }) {
+export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPath = null, playingEpisode = null, onGameComplete }) {
   const canvasRef = useRef(null)
   const navigate = useNavigate()
   const [gameState, setGameState] = useState('playing') // playing, won, lost
-  const [stats, setStats] = useState({ score: 0, distance: 0, aiScore: 0, aiDistance: 0 })
+  const [stats, setStats] = useState({ score: 0, distance: 0, aiScore: 0, aiDistance: 0, time: 0 })
   const [aiStatus, setAiStatus] = useState('loading') // loading, ready, error, disabled
+  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [loadingMessage, setLoadingMessage] = useState('')
+  const [gameTime, setGameTime] = useState(0)
+
+  // Determine which model to use - episode model or default trained model
+  const modelPath = episodeModelPath || '/models/rl/tfjs_model/model.json'
+
+  // Debug logging
+  console.log('[GameCanvas] Component rendered with props:', {
+    enableAI,
+    episodeModelPath,
+    playingEpisode,
+    modelPath
+  })
 
   // Game objects
   const gameRef = useRef({
@@ -28,7 +44,9 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
     keys: {},
     lastTime: 0,
     animationFrame: null,
-    aiActionCooldown: 0
+    aiActionCooldown: 0,
+    startTime: 0,
+    elapsedTime: 0
   })
 
   useEffect(() => {
@@ -51,20 +69,35 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
       game.aiAgent = new AIPlayer()
       game.aiActionCooldown = 0
 
-      // Load AI model
+      // Load AI model with progress tracking
       setAiStatus('loading')
-      game.aiAgent.loadModel(modelPath)
+      setLoadingProgress(0)
+      setLoadingMessage('Initializing AI...')
+
+      console.log('[GAME] Starting AI model load...')
+      console.log('[GAME] Model path:', modelPath)
+
+      // Progress callback
+      const onProgress = (progress, message) => {
+        console.log(`[GAME] Loading progress: ${progress}% - ${message}`)
+        setLoadingProgress(progress)
+        setLoadingMessage(message)
+      }
+
+      game.aiAgent.loadModel(modelPath, onProgress)
         .then(success => {
           if (success) {
             setAiStatus('ready')
-            console.log('[GAME] AI opponent loaded and ready')
+            console.log('[GAME] AI opponent loaded and ready!')
           } else {
             setAiStatus('error')
+            setLoadingMessage('Failed to load AI model')
             console.error('[GAME] Failed to load AI model')
           }
         })
         .catch(err => {
           setAiStatus('error')
+          setLoadingMessage(`Error: ${err.message}`)
           console.error('[GAME] AI loading error:', err)
         })
     } else {
@@ -119,6 +152,10 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
       const deltaTime = timestamp - game.lastTime
       game.lastTime = timestamp
 
+      // Update elapsed time
+      game.elapsedTime = (timestamp - game.startTime) / 1000 // Convert to seconds
+      setGameTime(game.elapsedTime)
+
       // Update
       updateGame(game)
 
@@ -132,28 +169,56 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
       const aiLost = enableAI && game.aiPlayer && !game.aiPlayer.isAlive
 
       if (humanWon || (enableAI && aiLost)) {
+        const finalTime = game.elapsedTime
         setGameState('won')
-        setStats({
+        const finalStats = {
           score: game.player.score,
           distance: Math.floor(game.player.distance),
           aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0
-        })
+          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0,
+          time: finalTime
+        }
+        setStats(finalStats)
+
+        // Notify parent component with completion data
+        if (onGameComplete) {
+          onGameComplete({
+            won: true,
+            time: finalTime,
+            score: game.player.score,
+            distance: Math.floor(game.player.distance)
+          })
+        }
       } else if (humanLost || (enableAI && aiWon)) {
+        const finalTime = game.elapsedTime
         setGameState('lost')
-        setStats({
+        const finalStats = {
           score: game.player.score,
           distance: Math.floor(game.player.distance),
           aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0
-        })
+          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0,
+          time: finalTime
+        }
+        setStats(finalStats)
+
+        // Notify parent component
+        if (onGameComplete) {
+          onGameComplete({
+            won: false,
+            time: finalTime,
+            score: game.player.score,
+            distance: Math.floor(game.player.distance)
+          })
+        }
       } else {
         game.animationFrame = requestAnimationFrame(gameLoop)
       }
     }
 
-    // Start game loop
-    game.lastTime = performance.now()
+    // Start game loop and timer
+    const now = performance.now()
+    game.lastTime = now
+    game.startTime = now
     game.animationFrame = requestAnimationFrame(gameLoop)
 
     // Cleanup
@@ -241,7 +306,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
       score: player.score,
       distance: Math.floor(player.distance),
       aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-      aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0
+      aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0,
+      time: game.elapsedTime || 0
     })
   }
 
@@ -402,11 +468,18 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
     // Restore context
     ctx.restore()
 
+    // Helper to format time
+    const formatTime = (seconds) => {
+      const mins = Math.floor(seconds / 60)
+      const secs = Math.floor(seconds % 60)
+      return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
+
     // Draw UI (fixed position)
     if (enableAI && game.aiPlayer) {
       // Split view: Human on left, AI on right
       ctx.fillStyle = 'rgba(76, 175, 80, 0.9)' // Green for human
-      ctx.fillRect(10, 10, 300, 100)
+      ctx.fillRect(10, 10, 300, 120)
 
       ctx.fillStyle = '#FFFFFF'
       ctx.font = 'bold 18px Arial'
@@ -414,9 +487,10 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
       ctx.font = 'bold 16px Arial'
       ctx.fillText(`Score: ${player.score}`, 20, 60)
       ctx.fillText(`Distance: ${Math.floor(player.distance)}m`, 20, 85)
+      ctx.fillText(`Time: ${formatTime(game.elapsedTime || 0)}`, 20, 110)
 
       ctx.fillStyle = 'rgba(255, 107, 107, 0.9)' // Red for AI
-      ctx.fillRect(canvas.width - 310, 10, 300, 100)
+      ctx.fillRect(canvas.width - 310, 10, 300, 120)
 
       ctx.fillStyle = '#FFFFFF'
       ctx.font = 'bold 18px Arial'
@@ -424,6 +498,13 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
       ctx.font = 'bold 16px Arial'
       ctx.fillText(`Score: ${game.aiPlayer.score}`, canvas.width - 290, 60)
       ctx.fillText(`Distance: ${Math.floor(game.aiPlayer.distance)}m`, canvas.width - 290, 85)
+
+      // Show episode number if playing against episode model
+      if (playingEpisode !== null) {
+        ctx.font = '14px Arial'
+        ctx.fillStyle = '#FFD700' // Gold color for episode indicator
+        ctx.fillText(`Episode ${playingEpisode}`, canvas.width - 290, 108)
+      }
 
       // AI status indicator
       if (aiStatus === 'loading') {
@@ -442,12 +523,13 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
     } else {
       // Solo play
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-      ctx.fillRect(10, 10, 300, 80)
+      ctx.fillRect(10, 10, 300, 105)
 
       ctx.fillStyle = '#FFD700'
       ctx.font = 'bold 20px Arial'
       ctx.fillText(`Score: ${player.score}`, 20, 40)
       ctx.fillText(`Distance: ${Math.floor(player.distance)}m`, 20, 70)
+      ctx.fillText(`Time: ${formatTime(game.elapsedTime || 0)}`, 20, 95)
     }
 
     // Controls hint
@@ -470,6 +552,12 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
     navigate('/')
   }
 
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = (seconds % 60).toFixed(1)
+    return mins > 0 ? `${mins}:${secs.padStart(4, '0')}` : `${secs}s`
+  }
+
   return (
     <div className="game-canvas-wrapper">
       <canvas
@@ -490,6 +578,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
                   <h3>🧑 You</h3>
                   <p>Score: <strong>{stats.score}</strong></p>
                   <p>Distance: <strong>{stats.distance}m</strong></p>
+                  <p>Time: <strong>{formatTime(stats.time)}</strong></p>
                   <p className={stats.distance > stats.aiDistance ? 'winner' : ''}>
                     {stats.distance > stats.aiDistance ? '👑 Winner' : ''}
                   </p>
@@ -499,6 +588,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
                   <h3>🤖 AI</h3>
                   <p>Score: <strong>{stats.aiScore}</strong></p>
                   <p>Distance: <strong>{stats.aiDistance}m</strong></p>
+                  <p>Time: <strong>{formatTime(stats.time)}</strong></p>
                   <p className={stats.aiDistance > stats.distance ? 'winner' : ''}>
                     {stats.aiDistance > stats.distance ? '👑 Winner' : ''}
                   </p>
@@ -508,6 +598,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
               <div className="final-stats">
                 <p>Score: <strong>{stats.score}</strong></p>
                 <p>Distance: <strong>{stats.distance}m</strong></p>
+                <p>Time: <strong>{formatTime(stats.time)}</strong></p>
               </div>
             )}
 
@@ -519,6 +610,26 @@ export default function GameCanvas({ onGameEnd, enableAI = false, modelPath = '/
                 🏠 Back to Menu
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Loading Progress Overlay */}
+      {aiStatus === 'loading' && (
+        <div className="game-overlay loading-overlay">
+          <div className="loading-container">
+            <h2>🤖 Loading AI Opponent</h2>
+            <div className="loading-progress-wrapper">
+              <div className="loading-progress-bar">
+                <div
+                  className="loading-progress-fill"
+                  style={{ width: `${loadingProgress}%` }}
+                />
+              </div>
+              <div className="loading-percentage">{Math.round(loadingProgress)}%</div>
+            </div>
+            <p className="loading-message">{loadingMessage}</p>
+            <div className="loading-spinner">⏳</div>
           </div>
         </div>
       )}

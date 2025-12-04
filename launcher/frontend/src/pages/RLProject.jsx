@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import GameCanvas from '../components/rl/GameCanvas'
 import TrainingDashboard from '../components/rl/TrainingDashboard'
+import EpisodeCheckpoints from '../components/rl/EpisodeCheckpoints'
+import Scoreboard from '../components/rl/Scoreboard'
 import { rlAPI } from '../services/api'
 import './RLProject.css'
 
@@ -18,6 +20,17 @@ function RLProject() {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  const [episodeModelPath, setEpisodeModelPath] = useState(null) // Model path for selected episode
+  const [playingEpisode, setPlayingEpisode] = useState(null) // Episode number being played
+  const [trainingStatus, setTrainingStatus] = useState(null) // Training status for checkpoints
+  const [availableModels, setAvailableModels] = useState([]) // List of available models
+  const [selectedModel, setSelectedModel] = useState(null) // Currently selected model for gameplay
+
+  // Scoreboard state
+  const [showNamePrompt, setShowNamePrompt] = useState(false)
+  const [playerName, setPlayerName] = useState('')
+  const [nameInput, setNameInput] = useState('')
+  const scoreboardRef = useRef(null)
 
   const TRAINING_PASSWORD = 'John117@home'
 
@@ -30,7 +43,46 @@ function RLProject() {
   // Check backend status on mount
   useEffect(() => {
     checkStatus()
+    fetchAvailableModels()
   }, [])
+
+  const fetchAvailableModels = async () => {
+    try {
+      console.log('[RLProject] Fetching available models...')
+      const response = await rlAPI.getAvailableModels()
+      console.log('[RLProject] Available models:', response.data.models)
+      setAvailableModels(response.data.models || [])
+      // Auto-select first model if available
+      if (response.data.models && response.data.models.length > 0) {
+        const firstModel = response.data.models[0]
+        console.log('[RLProject] Auto-selecting first model:', firstModel)
+        setSelectedModel(firstModel)
+      } else {
+        console.log('[RLProject] No models available')
+      }
+    } catch (error) {
+      console.error('[RLProject] Failed to fetch available models:', error)
+    }
+  }
+
+  // Fetch training status when training tab is active
+  useEffect(() => {
+    const fetchTrainingStatus = async () => {
+      try {
+        const response = await rlAPI.getTrainingStatus()
+        setTrainingStatus(response.data)
+      } catch (error) {
+        console.error('Failed to fetch training status:', error)
+      }
+    }
+
+    if (activeTab === 'training' && isTrainingAuthenticated) {
+      fetchTrainingStatus()
+      // Poll every 5 seconds while training tab is active
+      const interval = setInterval(fetchTrainingStatus, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [activeTab, isTrainingAuthenticated])
 
   const checkStatus = async () => {
     try {
@@ -45,12 +97,50 @@ function RLProject() {
   }
 
   const startGame = () => {
+    // Show name prompt before starting game
+    setShowNamePrompt(true)
+    // Load previously saved name if available
+    const savedName = localStorage.getItem('rl_platformer_player_name')
+    setNameInput(savedName || '')
+  }
+
+  const handleNameSubmit = (e) => {
+    e.preventDefault()
+    const name = nameInput.trim() || 'Anonymous'
+    setPlayerName(name)
+    // Save name for future games
+    localStorage.setItem('rl_platformer_player_name', name)
+    setShowNamePrompt(false)
+
+    console.log('[RLProject] Starting game with:', {
+      enableAI,
+      selectedModel,
+      episodeModelPath,
+      playingEpisode,
+      playerName: name
+    })
     setGameStarted(true)
+  }
+
+  const handleNameCancel = () => {
+    setShowNamePrompt(false)
+    setNameInput('')
+  }
+
+  const handleGameComplete = (gameData) => {
+    console.log('[RLProject] Game completed:', gameData)
+
+    // Save score if player won
+    if (gameData.won && scoreboardRef.current) {
+      scoreboardRef.current(playerName, gameData.time, gameData.score, gameData.distance, gameData.won)
+    }
   }
 
   const resetGame = () => {
     setGameStarted(false)
-    // TODO: Reset game state
+    // Clear episode model selection
+    setEpisodeModelPath(null)
+    setPlayingEpisode(null)
   }
 
   const handleTrainingTabClick = () => {
@@ -81,6 +171,14 @@ function RLProject() {
     setShowPasswordPrompt(false)
     setPasswordInput('')
     setPasswordError('')
+  }
+
+  const handlePlayAgainst = (episode, modelPath) => {
+    setEpisodeModelPath(modelPath)
+    setPlayingEpisode(episode)
+    setGameStarted(true)
+    setEnableAI(true)
+    setActiveTab('game')
   }
 
   if (loading) {
@@ -118,8 +216,8 @@ function RLProject() {
           </div>
           <div className="status-item">
             <span className="label">Model:</span>
-            <span className={`value ${status.tfjs_model_exists ? 'success' : 'warning'}`}>
-              {status.tfjs_model_exists ? '✓ Loaded' : 'Not Trained'}
+            <span className={`value ${status.any_model_exists ? 'success' : 'warning'}`}>
+              {status.any_model_exists ? '✓ Loaded' : 'Not Trained'}
             </span>
           </div>
         </div>
@@ -162,6 +260,35 @@ function RLProject() {
                   Unlock
                 </button>
                 <button type="button" onClick={handlePasswordCancel} className="password-cancel-btn">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Name Prompt Modal */}
+      {showNamePrompt && (
+        <div className="password-modal-overlay" onClick={handleNameCancel}>
+          <div className="password-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>🎮 Enter Your Name</h3>
+            <p>Enter your name to track your score on the leaderboard!</p>
+            <form onSubmit={handleNameSubmit}>
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="Your name (or leave blank for Anonymous)"
+                autoFocus
+                className="password-input"
+                maxLength={20}
+              />
+              <div className="password-actions">
+                <button type="submit" className="password-submit-btn">
+                  Start Game
+                </button>
+                <button type="button" onClick={handleNameCancel} className="password-cancel-btn">
                   Cancel
                 </button>
               </div>
@@ -273,7 +400,7 @@ function RLProject() {
                 </div>
 
                 {/* AI Mode Toggle */}
-                {status?.tfjs_model_exists && (
+                {status?.any_model_exists && (
                   <div className="ai-mode-toggle">
                     <label className="toggle-container">
                       <input
@@ -293,9 +420,41 @@ function RLProject() {
                   </div>
                 )}
 
+                {/* Model Selector */}
+                {enableAI && availableModels.length > 0 && (
+                  <div className="model-selector">
+                    <label htmlFor="model-select" className="model-selector-label">
+                      🎯 Select AI Model:
+                    </label>
+                    <select
+                      id="model-select"
+                      className="model-select"
+                      value={selectedModel?.id || ''}
+                      onChange={(e) => {
+                        const model = availableModels.find(m => m.id === e.target.value)
+                        setSelectedModel(model)
+                      }}
+                    >
+                      {availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} - {model.description}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedModel && (
+                      <p className="model-hint">
+                        Playing against: <strong>{selectedModel.name}</strong>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <button className="start-button" onClick={startGame}>
                   {enableAI ? '🏁 Start Race vs AI' : '🎮 Start Solo Game'}
                 </button>
+
+                {/* Scoreboard - below the play button */}
+                <Scoreboard onNewScore={scoreboardRef} />
 
                 <div className="features">
                   <div className="feature">
@@ -330,7 +489,13 @@ function RLProject() {
               </div>
             ) : (
               <div className="game-container">
-                <GameCanvas onGameEnd={resetGame} enableAI={enableAI} />
+                <GameCanvas
+                  onGameEnd={resetGame}
+                  enableAI={enableAI}
+                  episodeModelPath={episodeModelPath || selectedModel?.path}
+                  playingEpisode={playingEpisode}
+                  onGameComplete={handleGameComplete}
+                />
               </div>
             )}
           </div>
@@ -379,7 +544,14 @@ function RLProject() {
 
         {/* Training Tab */}
         {activeTab === 'training' && (
-          <TrainingDashboard status={status} />
+          <>
+            <TrainingDashboard status={status} />
+            <EpisodeCheckpoints
+              isTraining={trainingStatus?.is_training && trainingStatus?.process_alive}
+              onPlayAgainst={handlePlayAgainst}
+              onModelExported={fetchAvailableModels}
+            />
+          </>
         )}
       </div>
     </div>
