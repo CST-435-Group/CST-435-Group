@@ -139,6 +139,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
           delete game.keys['A']
           delete game.keys['d']
           delete game.keys['D']
+          // Also reset jump flag to prevent stuck jumps
+          game.jumpKeyWasPressed = false
         }
       }
     }
@@ -160,6 +162,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
         delete game.keys['A']
         delete game.keys['d']
         delete game.keys['D']
+        // Also reset jump flag when Shift is released to prevent stuck jumps
+        game.jumpKeyWasPressed = false
       }
     }
 
@@ -277,6 +281,12 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     const jumpPressed = (' ' in keys) || ('ArrowUp' in keys) || ('w' in keys) || ('W' in keys)
     const sprintPressed = ('Shift' in keys)
     const duckPressed = ('ArrowDown' in keys) || ('s' in keys) || ('S' in keys)
+
+    // Safety: If jump flag is set but no jump key is pressed, reset it
+    // This prevents the flag from getting stuck
+    if (game.jumpKeyWasPressed && !jumpPressed) {
+      game.jumpKeyWasPressed = false
+    }
 
     // Movement - only move if one direction is pressed
     if (leftPressed && !rightPressed) {
