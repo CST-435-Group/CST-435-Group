@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
+import { rlAPI } from '../../services/api'
 import './Scoreboard.css'
 
 /**
  * Scoreboard component for displaying and managing player scores
- * Stores scores in localStorage with player names and completion times
+ * Uses backend API with shared database for global leaderboard
  */
 export default function Scoreboard({ onNewScore }) {
   const [scores, setScores] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     loadScores()
@@ -20,62 +23,56 @@ export default function Scoreboard({ onNewScore }) {
     }
   }, [onNewScore])
 
-  const loadScores = () => {
-    const storedScores = localStorage.getItem('rl_platformer_scores')
-    if (storedScores) {
-      try {
-        const parsed = JSON.parse(storedScores)
-        setScores(parsed.sort((a, b) => a.time - b.time)) // Sort by time (fastest first)
-      } catch (error) {
-        console.error('Failed to load scores:', error)
-        setScores([])
-      }
+  const loadScores = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await rlAPI.getScores(10)
+      setScores(response.data.scores || [])
+    } catch (err) {
+      console.error('Failed to load scores:', err)
+      setError('Failed to load leaderboard')
+      setScores([])
+    } finally {
+      setLoading(false)
     }
   }
 
-  const addScore = (playerName, time, score, distance, won) => {
+  const addScore = async (playerName, time, score, distance, won) => {
     // Only save winning scores
     if (!won) return
 
-    const newScore = {
-      name: playerName.trim() || 'Anonymous',
-      time: Math.round(time * 10) / 10, // Round to 1 decimal
-      score,
-      distance,
-      timestamp: new Date().toISOString(),
-      date: new Date().toLocaleDateString()
-    }
-
-    let updatedScores = [...scores]
-
-    // Check if player already exists
-    const existingIndex = updatedScores.findIndex(s =>
-      s.name.toLowerCase() === newScore.name.toLowerCase()
-    )
-
-    if (existingIndex !== -1) {
-      // Only update if new time is better (faster)
-      if (newScore.time < updatedScores[existingIndex].time) {
-        updatedScores[existingIndex] = newScore
+    try {
+      const scoreData = {
+        name: playerName.trim() || 'Anonymous',
+        time: Math.round(time * 10) / 10,
+        score,
+        distance
       }
-    } else {
-      // Add new player
-      updatedScores.push(newScore)
+
+      console.log('[Scoreboard] Submitting score:', scoreData)
+      const response = await rlAPI.submitScore(scoreData)
+      console.log('[Scoreboard] Server response:', response.data)
+
+      // Reload scores to get updated leaderboard
+      await loadScores()
+    } catch (err) {
+      console.error('Failed to submit score:', err)
+      // Don't show error to user, just log it
     }
-
-    // Sort by time (fastest first) and keep top 10
-    updatedScores.sort((a, b) => a.time - b.time)
-    updatedScores = updatedScores.slice(0, 10)
-
-    // Save to localStorage
-    localStorage.setItem('rl_platformer_scores', JSON.stringify(updatedScores))
-    setScores(updatedScores)
   }
 
-  const clearScores = () => {
-    if (window.confirm('Are you sure you want to clear all scores?')) {
-      localStorage.removeItem('rl_platformer_scores')
+  const clearScores = async () => {
+    if (!window.confirm('Are you sure you want to clear ALL scores from the global leaderboard? This will affect all players!')) {
+      return
+    }
+
+    try {
+      await rlAPI.clearScores()
       setScores([])
+    } catch (err) {
+      console.error('Failed to clear scores:', err)
+      alert('Failed to clear scores. Please try again.')
     }
   }
 
@@ -88,15 +85,26 @@ export default function Scoreboard({ onNewScore }) {
   return (
     <div className="scoreboard-container">
       <div className="scoreboard-header">
-        <h3>🏆 Leaderboard - Best Times</h3>
+        <h3>🏆 Global Leaderboard - Best Times</h3>
         {scores.length > 0 && (
           <button onClick={clearScores} className="clear-scores-btn" title="Clear all scores">
-            🗑️ Clear
+            🗑️ Clear All
           </button>
         )}
       </div>
 
-      {scores.length === 0 ? (
+      {loading ? (
+        <div className="no-scores">
+          <p>Loading leaderboard...</p>
+        </div>
+      ) : error ? (
+        <div className="no-scores">
+          <p style={{ color: '#f44336' }}>{error}</p>
+          <button onClick={loadScores} style={{ marginTop: '10px', padding: '8px 16px', cursor: 'pointer' }}>
+            Retry
+          </button>
+        </div>
+      ) : scores.length === 0 ? (
         <div className="no-scores">
           <p>No scores yet! Be the first to complete the level.</p>
         </div>
@@ -131,6 +139,9 @@ export default function Scoreboard({ onNewScore }) {
 
       <div className="scoreboard-footer">
         <p>⏱️ Complete the level as fast as you can to claim your spot!</p>
+        <p style={{ fontSize: '0.85rem', color: '#999', marginTop: '5px' }}>
+          🌐 Global leaderboard - compete with players worldwide!
+        </p>
       </div>
     </div>
   )

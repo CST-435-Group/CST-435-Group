@@ -139,6 +139,7 @@ export const rlAPI = {
   getStatus: () => api.get('/rl/status'),
   getGpuInfo: () => api.get('/rl/gpu/info'),
   getModelInfo: () => api.get('/rl/model/info'),
+  getAvailableModels: () => api.get('/rl/models/available'),
   exportModel: () => api.post('/rl/model/export'),
   startTraining: (params) => api.post('/rl/training/start', null, { params }),
   stopTraining: () => api.post('/rl/training/stop'),
@@ -148,6 +149,14 @@ export const rlAPI = {
   getTrainingFrame: (filename) => `${API_URL}/rl/training/frame/${filename}`,
   // SSE stream endpoint - use raw fetch since it's not JSON
   streamTrainingStatus: () => `${API_URL}/rl/training/stream`,
+  // Episode checkpoints
+  getEpisodeCheckpoints: () => api.get('/rl/checkpoints/episodes'),
+  exportEpisodeCheckpoint: (episode) => api.post(`/rl/checkpoints/export/${episode}`),
+  exportEpisodeCheckpointONNX: (episode) => api.post(`/rl/checkpoints/export-onnx/${episode}`),
+  // Scoreboard
+  getScores: (limit = 10) => api.get(`/rl/scores?limit=${limit}`),
+  submitScore: (scoreData) => api.post('/rl/scores', scoreData),
+  clearScores: () => api.delete('/rl/scores'),
 }
 
 // General API calls

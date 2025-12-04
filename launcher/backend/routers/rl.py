@@ -53,6 +53,16 @@ class ModelInfo(BaseModel):
     num_actions: int
 
 
+class ScoreEntry(BaseModel):
+    """Score entry for leaderboard"""
+    name: str
+    time: float
+    score: int
+    distance: int
+    timestamp: Optional[str] = None
+    date: Optional[str] = None
+
+
 @router.get("/", summary="RL API Info")
 def rl_info():
     """Get RL API information"""
@@ -110,14 +120,27 @@ def check_status():
     model_path = RL_BACKEND_PATH / "models" / "platformer_agent.zip" if RL_BACKEND_PATH else None
     tfjs_model = RL_BACKEND_PATH / "models" / "tfjs_model" / "model.json" if RL_BACKEND_PATH else None
 
+    # Check for any ONNX models
+    onnx_models_exist = False
+    if RL_BACKEND_PATH:
+        models_dir = RL_BACKEND_PATH / "models"
+        if models_dir.exists():
+            # Check for any episode_*_onnx directories with model.onnx
+            onnx_models_exist = any((models_dir / d / "model.onnx").exists()
+                                   for d in models_dir.glob("episode_*_onnx"))
+
+    any_model_exists = (tfjs_model.exists() if tfjs_model else False) or onnx_models_exist
+
     return {
         "backend_available": RL_BACKEND_PATH is not None,
         "backend_path": str(RL_BACKEND_PATH) if RL_BACKEND_PATH else None,
         "model_exists": model_path.exists() if model_path else False,
         "tfjs_model_exists": tfjs_model.exists() if tfjs_model else False,
+        "onnx_model_exists": onnx_models_exist,
+        "any_model_exists": any_model_exists,
         "gpu_available": check_gpu_available(),
         "ready_for_training": RL_BACKEND_PATH is not None,
-        "ready_for_gameplay": tfjs_model.exists() if tfjs_model else False
+        "ready_for_gameplay": any_model_exists
     }
 
 
@@ -476,8 +499,105 @@ def get_model_info():
             "path": str(tfjs_path) if tfjs_path.exists() else None
         },
         "input_shape": [84, 84, 3],  # Observation shape
-        "num_actions": 6,  # Left, Right, Jump, Sprint, Duck, Idle
+        "num_actions": 9,  # 0=idle, 1=left, 2=right, 3=jump, 4=sprint+right, 5=duck, 6=jump+left, 7=jump+right, 8=sprint+jump+right
         "algorithm": "PPO (Proximal Policy Optimization)"
+    }
+
+
+@router.get("/models/available", summary="List Available Models")
+def get_available_models():
+    """Get list of all available models for gameplay (both TensorFlow.js and ONNX)"""
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    models_dir = RL_BACKEND_PATH / "models"
+    available_models = []
+
+    # Check for main trained model (TensorFlow.js)
+    main_tfjs = models_dir / "tfjs_model" / "model.json"
+    if main_tfjs.exists():
+        available_models.append({
+            "id": "main_tfjs",
+            "name": "Main Model (TensorFlow.js)",
+            "path": "/models/rl/tfjs_model/model.json",
+            "description": "Primary trained model",
+            "type": "main",
+            "format": "tfjs"
+        })
+
+    # Check for main trained model (ONNX)
+    main_onnx = models_dir / "exported_onnx" / "model.onnx"
+    if main_onnx.exists():
+        available_models.append({
+            "id": "main_onnx",
+            "name": "Main Model (ONNX)",
+            "path": str(main_onnx),
+            "description": "Primary trained model (ONNX format)",
+            "type": "main",
+            "format": "onnx"
+        })
+
+    # Check for episode-specific models
+    if models_dir.exists():
+        # TensorFlow.js episode models
+        for episode_dir in models_dir.glob("episode_*_tfjs"):
+            tfjs_model = episode_dir / "tfjs_model" / "model.json"
+            if tfjs_model.exists():
+                try:
+                    episode_num = int(episode_dir.name.split("_")[1])
+                    available_models.append({
+                        "id": f"episode_{episode_num}_tfjs",
+                        "name": f"Episode {episode_num} (TensorFlow.js)",
+                        "path": f"/models/{episode_dir.name}/tfjs_model/model.json",
+                        "description": f"Episode {episode_num} checkpoint",
+                        "type": "episode",
+                        "episode": episode_num,
+                        "format": "tfjs"
+                    })
+                except (IndexError, ValueError):
+                    pass
+
+        # ONNX episode models
+        for episode_dir in models_dir.glob("episode_*_onnx"):
+            onnx_model = episode_dir / "model.onnx"
+            if onnx_model.exists():
+                try:
+                    episode_num = int(episode_dir.name.split("_")[1])
+
+                    # Try to read reward from checkpoint manifest
+                    manifest_path = RL_BACKEND_PATH / "training" / "episode_checkpoints" / "manifest.json"
+                    reward_info = ""
+                    if manifest_path.exists():
+                        try:
+                            with open(manifest_path, 'r') as f:
+                                checkpoints = json.load(f)
+                                checkpoint = next((c for c in checkpoints if c['episode'] == episode_num), None)
+                                if checkpoint:
+                                    reward_info = f" (Reward: {checkpoint['reward']:.1f})"
+                        except:
+                            pass
+
+                    available_models.append({
+                        "id": f"episode_{episode_num}_onnx",
+                        "name": f"Episode {episode_num} (ONNX){reward_info}",
+                        "path": f"/api/rl/models/onnx/{episode_num}/model.onnx",
+                        "description": f"Episode {episode_num} checkpoint",
+                        "type": "episode",
+                        "episode": episode_num,
+                        "format": "onnx"
+                    })
+                except (IndexError, ValueError):
+                    pass
+
+    # Sort by episode number (newest first), with main models at top
+    available_models.sort(key=lambda m: (
+        0 if m['type'] == 'main' else 1,  # Main models first
+        -m.get('episode', 0)  # Then by episode (descending)
+    ))
+
+    return {
+        "models": available_models,
+        "count": len(available_models)
     }
 
 
@@ -496,9 +616,19 @@ def export_model():
         raise HTTPException(status_code=404, detail="No trained model found. Train a model first.")
 
     try:
+        # Check if export virtual environment exists
+        export_env_python = RL_BACKEND_PATH / "export_env" / "Scripts" / "python.exe"
+        if export_env_python.exists():
+            python_cmd = str(export_env_python)
+            print(f"[EXPORT] Using export environment: {python_cmd}")
+        else:
+            python_cmd = sys.executable
+            print(f"[EXPORT] WARNING: Export environment not found")
+            print(f"[EXPORT] Run setup_export_env.bat in RL/backend to create it")
+
         # Run export script
         result = subprocess.run(
-            [sys.executable, str(export_script)],
+            [python_cmd, str(export_script)],
             cwd=str(RL_BACKEND_PATH),
             capture_output=True,
             text=True,
@@ -521,6 +651,222 @@ def export_model():
         raise HTTPException(status_code=500, detail="Export timed out")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@router.get("/checkpoints/episodes", summary="Get Episode Checkpoints")
+def get_episode_checkpoints():
+    """Get list of recent episode checkpoints (last 10)"""
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    manifest_path = RL_BACKEND_PATH / "training" / "episode_checkpoints" / "manifest.json"
+
+    if not manifest_path.exists():
+        return {
+            "checkpoints": [],
+            "message": "No episode checkpoints found. Start training to create checkpoints."
+        }
+
+    try:
+        with open(manifest_path, 'r') as f:
+            checkpoints = json.load(f)
+
+        # Find the best model (highest reward)
+        best_model = max(checkpoints, key=lambda x: x['reward']) if checkpoints else None
+
+        # Get 10 most recent episodes sorted by episode number (newest first)
+        recent_checkpoints = sorted(checkpoints, key=lambda x: x['episode'], reverse=True)[:10]
+
+        return {
+            "best_model": best_model,
+            "recent_checkpoints": recent_checkpoints,
+            "total_count": len(checkpoints)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read checkpoints: {str(e)}")
+
+
+@router.post("/checkpoints/export-onnx/{episode}", summary="Export Episode Checkpoint to ONNX")
+def export_episode_checkpoint_onnx(episode: int):
+    """
+    Export a specific episode checkpoint to ONNX format for ONNX Runtime Web
+    This is the recommended export method - avoids TensorFlow conversion issues
+    """
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    # Read manifest to find checkpoint
+    manifest_path = RL_BACKEND_PATH / "training" / "episode_checkpoints" / "manifest.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="No episode checkpoints found")
+
+    try:
+        with open(manifest_path, 'r') as f:
+            checkpoints = json.load(f)
+
+        # Find the checkpoint
+        checkpoint = next((c for c in checkpoints if c['episode'] == episode), None)
+        if not checkpoint:
+            raise HTTPException(status_code=404, detail=f"Checkpoint for episode {episode} not found")
+
+        model_path = RL_BACKEND_PATH / "training" / (checkpoint['path'] + '.zip')
+        if not model_path.exists():
+            raise HTTPException(status_code=404, detail=f"Checkpoint file not found: {model_path}")
+
+        # Export to ONNX using new export script
+        export_script = RL_BACKEND_PATH / "training" / "export_model_onnx.py"
+        if not export_script.exists():
+            raise HTTPException(status_code=500, detail="ONNX export script not found")
+
+        # Output directory for this episode
+        output_dir = RL_BACKEND_PATH / "models" / f"episode_{episode}_onnx"
+
+        # Check if export virtual environment exists
+        export_env_python = RL_BACKEND_PATH / "export_env" / "Scripts" / "python.exe"
+        if export_env_python.exists():
+            python_cmd = str(export_env_python)
+            print(f"[EXPORT] Using export environment: {python_cmd}")
+        else:
+            python_cmd = sys.executable
+            print(f"[EXPORT] WARNING: Export environment not found")
+            print(f"[EXPORT] Using system Python (may have dependency issues)")
+
+        cmd = [
+            python_cmd,
+            str(export_script),
+            "--model-path", str(model_path),
+            "--output-dir", str(output_dir)
+        ]
+
+        print(f"[EXPORT] Running ONNX export: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+
+        print(f"[EXPORT] Return code: {result.returncode}")
+        if result.stdout:
+            print(f"[EXPORT] stdout: {result.stdout}")
+        if result.stderr:
+            print(f"[EXPORT] stderr: {result.stderr}")
+
+        if result.returncode == 0:
+            return {
+                "status": "success",
+                "episode": episode,
+                "reward": checkpoint['reward'],
+                "model_path": str(output_dir / "model.onnx"),
+                "format": "ONNX",
+                "runtime": "ONNX Runtime Web",
+                "message": f"Episode {episode} exported to ONNX successfully",
+                "usage_guide": str(output_dir / "USAGE.md")
+            }
+        else:
+            error_msg = f"ONNX export failed: {result.stderr}"
+            print(f"[EXPORT ERROR] {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Export timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export to ONNX: {str(e)}")
+
+
+@router.post("/checkpoints/export/{episode}", summary="Export Episode Checkpoint")
+def export_episode_checkpoint(episode: int):
+    """
+    Export a specific episode checkpoint to TensorFlow.js format
+    This allows playing against that specific episode's AI
+    NOTE: This endpoint has known issues with Conv layer conversion.
+    Use /checkpoints/export-onnx/{episode} instead for ONNX Runtime Web (recommended)
+    """
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    # Read manifest to find checkpoint
+    manifest_path = RL_BACKEND_PATH / "training" / "episode_checkpoints" / "manifest.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="No episode checkpoints found")
+
+    try:
+        with open(manifest_path, 'r') as f:
+            checkpoints = json.load(f)
+
+        # Find the checkpoint
+        checkpoint = next((c for c in checkpoints if c['episode'] == episode), None)
+        if not checkpoint:
+            raise HTTPException(status_code=404, detail=f"Checkpoint for episode {episode} not found")
+
+        model_path = RL_BACKEND_PATH / "training" / (checkpoint['path'] + '.zip')
+        if not model_path.exists():
+            raise HTTPException(status_code=404, detail=f"Checkpoint file not found: {model_path}")
+
+        # Export to TensorFlow.js
+        export_script = RL_BACKEND_PATH / "training" / "export_model.py"
+        if not export_script.exists():
+            raise HTTPException(status_code=500, detail="Export script not found")
+
+        # Run export with specific output directory
+        output_dir = RL_BACKEND_PATH / "models" / f"episode_{episode}_tfjs"
+
+        # Check if export virtual environment exists
+        export_env_python = RL_BACKEND_PATH / "export_env" / "Scripts" / "python.exe"
+        if export_env_python.exists():
+            python_cmd = str(export_env_python)
+            print(f"[EXPORT] Using export environment: {python_cmd}")
+        else:
+            python_cmd = sys.executable
+            print(f"[EXPORT] WARNING: Export environment not found at {export_env_python}")
+            print(f"[EXPORT] Using system Python: {python_cmd}")
+            print(f"[EXPORT] Run setup_export_env.bat in RL/backend to create export environment")
+
+        cmd = [
+            python_cmd,
+            str(export_script),
+            "--model-path", str(model_path),
+            "--output-dir", str(output_dir)
+        ]
+
+        print(f"[EXPORT] Running command: {' '.join(cmd)}")
+        print(f"[EXPORT] Model path: {model_path}")
+        print(f"[EXPORT] Output dir: {output_dir}")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+
+        print(f"[EXPORT] Return code: {result.returncode}")
+        if result.stdout:
+            print(f"[EXPORT] stdout: {result.stdout}")
+        if result.stderr:
+            print(f"[EXPORT] stderr: {result.stderr}")
+
+        if result.returncode == 0:
+            return {
+                "status": "success",
+                "episode": episode,
+                "reward": checkpoint['reward'],
+                "model_path": f"/models/episode_{episode}_tfjs/tfjs_model/model.json",
+                "message": f"Episode {episode} exported successfully"
+            }
+        else:
+            error_msg = f"Export failed with code {result.returncode}. stderr: {result.stderr}"
+            print(f"[EXPORT ERROR] {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail=error_msg
+            )
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Export timed out")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export checkpoint: {str(e)}")
 
 
 def check_gpu_available() -> bool:
@@ -557,3 +903,142 @@ def get_gpu_info():
             "cuda_available": False,
             "message": "PyTorch not installed"
         }
+
+
+@router.get("/models/onnx/{episode}/model.onnx", summary="Get ONNX Model File")
+def get_onnx_model(episode: int):
+    """Serve ONNX model file for browser loading"""
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    model_path = RL_BACKEND_PATH / "models" / f"episode_{episode}_onnx" / "model.onnx"
+
+    if not model_path.exists():
+        raise HTTPException(status_code=404, detail=f"ONNX model for episode {episode} not found")
+
+    return FileResponse(
+        model_path,
+        media_type="application/octet-stream",
+        filename=f"episode_{episode}_model.onnx"
+    )
+
+
+# Scoreboard Database Path
+SCORES_DB_PATH = Path(__file__).parent.parent / "data" / "rl_scores.json"
+
+
+def load_scores() -> List[Dict[str, Any]]:
+    """Load scores from JSON file"""
+    if not SCORES_DB_PATH.exists():
+        SCORES_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        return []
+
+    try:
+        with open(SCORES_DB_PATH, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading scores: {e}")
+        return []
+
+
+def save_scores(scores: List[Dict[str, Any]]):
+    """Save scores to JSON file"""
+    try:
+        SCORES_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(SCORES_DB_PATH, 'w') as f:
+            json.dump(scores, f, indent=2)
+    except Exception as e:
+        print(f"Error saving scores: {e}")
+        raise
+
+
+@router.get("/scores", summary="Get Leaderboard Scores")
+def get_scores(limit: int = 10):
+    """
+    Get top scores from the global leaderboard
+    Returns scores sorted by completion time (fastest first)
+    """
+    scores = load_scores()
+
+    # Sort by time (fastest first) and limit results
+    sorted_scores = sorted(scores, key=lambda x: x['time'])[:limit]
+
+    return {
+        "scores": sorted_scores,
+        "total_count": len(scores),
+        "returned_count": len(sorted_scores)
+    }
+
+
+@router.post("/scores", summary="Submit Score to Leaderboard")
+def submit_score(score_entry: ScoreEntry):
+    """
+    Submit a new score to the global leaderboard
+    If player name already exists, only updates if new time is better (faster)
+    """
+    from datetime import datetime
+
+    # Load existing scores
+    scores = load_scores()
+
+    # Create new score entry
+    new_score = {
+        "name": score_entry.name.strip() or "Anonymous",
+        "time": round(score_entry.time, 1),
+        "score": score_entry.score,
+        "distance": score_entry.distance,
+        "timestamp": datetime.utcnow().isoformat(),
+        "date": datetime.utcnow().strftime("%Y-%m-%d")
+    }
+
+    # Check if player already exists
+    existing_index = None
+    for i, s in enumerate(scores):
+        if s['name'].lower() == new_score['name'].lower():
+            existing_index = i
+            break
+
+    if existing_index is not None:
+        # Only update if new time is better (faster)
+        if new_score['time'] < scores[existing_index]['time']:
+            scores[existing_index] = new_score
+            save_scores(scores)
+            return {
+                "status": "updated",
+                "message": f"New best time for {new_score['name']}!",
+                "score": new_score,
+                "previous_time": scores[existing_index]['time']
+            }
+        else:
+            return {
+                "status": "not_updated",
+                "message": f"Previous time was better",
+                "current_best": scores[existing_index]['time'],
+                "submitted_time": new_score['time']
+            }
+    else:
+        # Add new player
+        scores.append(new_score)
+        save_scores(scores)
+        return {
+            "status": "created",
+            "message": f"Score added for {new_score['name']}",
+            "score": new_score
+        }
+
+
+@router.delete("/scores", summary="Clear All Scores")
+def clear_scores():
+    """
+    Clear all scores from the leaderboard
+    WARNING: This is irreversible!
+    """
+    try:
+        if SCORES_DB_PATH.exists():
+            SCORES_DB_PATH.unlink()
+        return {
+            "status": "success",
+            "message": "All scores have been cleared"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear scores: {str(e)}")
