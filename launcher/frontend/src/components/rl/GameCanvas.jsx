@@ -185,12 +185,16 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       const deltaTime = timestamp - game.lastTime
       game.lastTime = timestamp
 
+      // Calculate frame-rate independent delta (normalized to 60 FPS)
+      // This ensures consistent speed across all devices
+      const normalizedDelta = deltaTime / (1000 / 60) // 60 FPS baseline
+
       // Update elapsed time
       game.elapsedTime = (timestamp - game.startTime) / 1000 // Convert to seconds
       setGameTime(game.elapsedTime)
 
-      // Update
-      updateGame(game)
+      // Update with deltaTime for frame-rate independence
+      updateGame(game, normalizedDelta)
 
       // Render
       renderGame(ctx, game)
@@ -266,7 +270,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     }
   }, [])
 
-  const updateGame = (game) => {
+  const updateGame = (game, deltaTime = 1) => {
     const { player, keys, map } = game
 
     if (!player.isAlive) return
@@ -303,21 +307,21 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     player.sprint(sprintPressed)
     player.duck(duckPressed)
 
-    // Update player physics
-    player.update(map.platforms, 1)
+    // Update player physics with deltaTime for frame-rate independence
+    player.update(map.platforms, deltaTime)
 
-    // Update camera (smooth follow)
+    // Update camera (smooth follow) - scaled by deltaTime for consistent smoothing
     const targetCameraX = player.x - 400
-    game.cameraX += (targetCameraX - game.cameraX) * 0.1
+    game.cameraX += (targetCameraX - game.cameraX) * 0.1 * deltaTime
 
     // Check coin collection
     map.coins.forEach(coin => {
       player.collectCoin(coin)
     })
 
-    // Update enemies
+    // Update enemies with deltaTime
     map.enemies.forEach(enemy => {
-      enemy.x += enemy.direction * enemy.speed
+      enemy.x += enemy.direction * enemy.speed * deltaTime
 
       // Simple AI: turn around at platform edges
       const onPlatform = map.platforms.find(p =>

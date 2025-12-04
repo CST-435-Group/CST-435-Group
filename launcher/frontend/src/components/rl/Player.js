@@ -22,17 +22,17 @@ export class Player {
     this.isDucking = false
   }
 
-  update(platforms, deltaTime) {
+  update(platforms, deltaTime = 1) {
     if (!this.isAlive) return
 
-    // Apply gravity
-    this.velocityY += this.gravity
+    // Apply gravity with deltaTime for frame-rate independence
+    this.velocityY += this.gravity * deltaTime
     if (this.velocityY > this.maxFallSpeed) {
       this.velocityY = this.maxFallSpeed
     }
 
-    // Apply horizontal velocity with collision detection
-    this.x += this.velocityX
+    // Apply horizontal velocity with collision detection (scaled by deltaTime)
+    this.x += this.velocityX * deltaTime
 
     // Check horizontal collision with platforms
     for (const platform of platforms) {
@@ -50,8 +50,8 @@ export class Player {
       }
     }
 
-    // Apply vertical velocity
-    this.y += this.velocityY
+    // Apply vertical velocity (scaled by deltaTime)
+    this.y += this.velocityY * deltaTime
 
     // Check ground collision (vertical - can jump up through platforms)
     this.isOnGround = false
