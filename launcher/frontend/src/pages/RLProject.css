@@ -198,6 +198,71 @@
   background: #e0e0e0;
 }
 
+/* Difficulty Selector */
+.difficulty-selector {
+  margin: 20px 0;
+}
+
+.difficulty-label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10px;
+  font-size: 1rem;
+}
+
+.difficulty-options {
+  display: flex;
+  gap: 10px;
+  flex-direction: column;
+}
+
+.difficulty-option {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f9f9f9;
+}
+
+.difficulty-option:hover {
+  border-color: #667eea;
+  background: #f0f4ff;
+}
+
+.difficulty-option.selected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f0f4ff, #e8f0ff);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.difficulty-option input[type="radio"] {
+  margin-right: 12px;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.difficulty-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.difficulty-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #333;
+}
+
+.difficulty-desc {
+  font-size: 0.85rem;
+  color: #666;
+}
+
 /* AI Mode Toggle */
 .ai-mode-toggle {
   background: white;
@@ -232,6 +297,54 @@
   font-size: 0.95rem;
   margin: 0;
   padding-left: 32px;
+}
+
+/* Model Selector */
+.model-selector {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+  border: 2px solid #667eea;
+}
+
+.model-selector-label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.model-select {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.model-select:hover {
+  border-color: #667eea;
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.model-hint {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 10px 0 0 0;
+}
+
+.model-hint strong {
+  color: #667eea;
 }
 
 .status-item .value.success {

@@ -12,8 +12,9 @@ import './GameCanvas.css'
  * @param {string} episodeModelPath - Path to episode-specific AI model (optional)
  * @param {number} playingEpisode - Episode number being played against (optional)
  * @param {function} onGameComplete - Callback when game completes with time and stats
+ * @param {string} difficulty - Game difficulty (easy, medium, hard)
  */
-export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPath = null, playingEpisode = null, onGameComplete }) {
+export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPath = null, playingEpisode = null, onGameComplete, difficulty = 'easy' }) {
   const canvasRef = useRef(null)
   const navigate = useNavigate()
   const [gameState, setGameState] = useState('playing') // playing, won, lost
@@ -58,7 +59,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
 
     // Initialize game
     const mapGen = new MapGenerator(1920, 1080, 32)
-    game.map = mapGen.generateMap()
+    game.map = mapGen.generateMap(null, difficulty) // Pass difficulty to map generator
     game.player = new Player(game.map.spawn.x, game.map.spawn.y)
     game.cameraX = 0
     game.jumpKeyWasPressed = false // Track if jump key was already pressed

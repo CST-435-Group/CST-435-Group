@@ -11,8 +11,16 @@ export class MapGenerator {
     this.seed = Date.now()
   }
 
-  generateMap(seed) {
+  generateMap(seed, difficulty = 'easy') {
     if (seed) this.seed = seed
+
+    // Determine number of platforms based on difficulty
+    let numPlatforms = 50 // Easy (default)
+    if (difficulty === 'medium') {
+      numPlatforms = 75 // 1.5x
+    } else if (difficulty === 'hard') {
+      numPlatforms = 100 // 2x
+    }
 
     const length = 200 // tiles
     const platforms = []
@@ -33,7 +41,7 @@ export class MapGenerator {
     let currentX = 300 // Start at the edge of the starting platform
     let currentY = startHeight - 50 // Start at similar height
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < numPlatforms; i++) {
       // Platform dimensions
       const platformWidth = this.randomInt(3, 8) * this.tileSize
       const platformHeight = this.tileSize

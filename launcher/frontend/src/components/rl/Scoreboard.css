@@ -22,6 +22,40 @@
   font-size: 1.8rem;
 }
 
+.difficulty-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  background: #f5f5f5;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.difficulty-tab {
+  flex: 1;
+  padding: 10px 15px;
+  border: 2px solid transparent;
+  background: white;
+  color: #666;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.difficulty-tab:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+}
+
+.difficulty-tab.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
 .clear-scores-btn {
   background: #f44336;
   color: white;

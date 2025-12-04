@@ -6,14 +6,19 @@ import './Scoreboard.css'
  * Scoreboard component for displaying and managing player scores
  * Uses backend API with shared database for global leaderboard
  */
-export default function Scoreboard({ onNewScore }) {
+export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
   const [scores, setScores] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedDifficulty, setSelectedDifficulty] = useState(difficulty)
 
   useEffect(() => {
     loadScores()
-  }, [])
+  }, [selectedDifficulty])
+
+  useEffect(() => {
+    setSelectedDifficulty(difficulty)
+  }, [difficulty])
 
   // Notify parent of new score
   useEffect(() => {
@@ -27,7 +32,7 @@ export default function Scoreboard({ onNewScore }) {
     try {
       setLoading(true)
       setError(null)
-      const response = await rlAPI.getScores(10)
+      const response = await rlAPI.getScores(10, selectedDifficulty)
       setScores(response.data.scores || [])
     } catch (err) {
       console.error('Failed to load scores:', err)
@@ -38,7 +43,7 @@ export default function Scoreboard({ onNewScore }) {
     }
   }
 
-  const addScore = async (playerName, time, score, distance, won) => {
+  const addScore = async (playerName, time, score, distance, won, gameDifficulty) => {
     // Only save winning scores
     if (!won) return
 
@@ -47,7 +52,8 @@ export default function Scoreboard({ onNewScore }) {
         name: playerName.trim() || 'Anonymous',
         time: Math.round(time * 10) / 10,
         score,
-        distance
+        distance,
+        difficulty: gameDifficulty || 'easy'
       }
 
       console.log('[Scoreboard] Submitting score:', scoreData)
@@ -82,6 +88,15 @@ export default function Scoreboard({ onNewScore }) {
     return mins > 0 ? `${mins}:${secs.padStart(4, '0')}` : `${secs}s`
   }
 
+  const getDifficultyLabel = (diff) => {
+    const labels = {
+      easy: '🟢 Easy',
+      medium: '🟡 Medium',
+      hard: '🔴 Hard'
+    }
+    return labels[diff] || '🟢 Easy'
+  }
+
   return (
     <div className="scoreboard-container">
       <div className="scoreboard-header">
@@ -91,6 +106,28 @@ export default function Scoreboard({ onNewScore }) {
             🗑️ Clear All
           </button>
         )}
+      </div>
+
+      {/* Difficulty Tabs */}
+      <div className="difficulty-tabs">
+        <button
+          className={`difficulty-tab ${selectedDifficulty === 'easy' ? 'active' : ''}`}
+          onClick={() => setSelectedDifficulty('easy')}
+        >
+          🟢 Easy
+        </button>
+        <button
+          className={`difficulty-tab ${selectedDifficulty === 'medium' ? 'active' : ''}`}
+          onClick={() => setSelectedDifficulty('medium')}
+        >
+          🟡 Medium
+        </button>
+        <button
+          className={`difficulty-tab ${selectedDifficulty === 'hard' ? 'active' : ''}`}
+          onClick={() => setSelectedDifficulty('hard')}
+        >
+          🔴 Hard
+        </button>
       </div>
 
       {loading ? (

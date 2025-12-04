@@ -59,6 +59,7 @@ class ScoreEntry(BaseModel):
     time: float
     score: int
     distance: int
+    difficulty: str = 'easy'  # easy, medium, hard
     timestamp: Optional[str] = None
     date: Optional[str] = None
 
@@ -953,20 +954,25 @@ def save_scores(scores: List[Dict[str, Any]]):
 
 
 @router.get("/scores", summary="Get Leaderboard Scores")
-def get_scores(limit: int = 10):
+def get_scores(limit: int = 10, difficulty: str = 'easy'):
     """
     Get top scores from the global leaderboard
     Returns scores sorted by completion time (fastest first)
+    Filters by difficulty level (easy, medium, hard)
     """
     scores = load_scores()
 
+    # Filter by difficulty
+    filtered_scores = [s for s in scores if s.get('difficulty', 'easy') == difficulty]
+
     # Sort by time (fastest first) and limit results
-    sorted_scores = sorted(scores, key=lambda x: x['time'])[:limit]
+    sorted_scores = sorted(filtered_scores, key=lambda x: x['time'])[:limit]
 
     return {
         "scores": sorted_scores,
-        "total_count": len(scores),
-        "returned_count": len(sorted_scores)
+        "total_count": len(filtered_scores),
+        "returned_count": len(sorted_scores),
+        "difficulty": difficulty
     }
 
 
@@ -974,7 +980,7 @@ def get_scores(limit: int = 10):
 def submit_score(score_entry: ScoreEntry):
     """
     Submit a new score to the global leaderboard
-    If player name already exists, only updates if new time is better (faster)
+    If player name already exists for this difficulty, only updates if new time is better (faster)
     """
     from datetime import datetime
 
@@ -987,27 +993,30 @@ def submit_score(score_entry: ScoreEntry):
         "time": round(score_entry.time, 1),
         "score": score_entry.score,
         "distance": score_entry.distance,
+        "difficulty": score_entry.difficulty,
         "timestamp": datetime.utcnow().isoformat(),
         "date": datetime.utcnow().strftime("%Y-%m-%d")
     }
 
-    # Check if player already exists
+    # Check if player already exists for this difficulty
     existing_index = None
     for i, s in enumerate(scores):
-        if s['name'].lower() == new_score['name'].lower():
+        if (s['name'].lower() == new_score['name'].lower() and
+            s.get('difficulty', 'easy') == new_score['difficulty']):
             existing_index = i
             break
 
     if existing_index is not None:
         # Only update if new time is better (faster)
         if new_score['time'] < scores[existing_index]['time']:
+            previous_time = scores[existing_index]['time']
             scores[existing_index] = new_score
             save_scores(scores)
             return {
                 "status": "updated",
-                "message": f"New best time for {new_score['name']}!",
+                "message": f"New best time for {new_score['name']} on {new_score['difficulty']}!",
                 "score": new_score,
-                "previous_time": scores[existing_index]['time']
+                "previous_time": previous_time
             }
         else:
             return {
@@ -1017,12 +1026,12 @@ def submit_score(score_entry: ScoreEntry):
                 "submitted_time": new_score['time']
             }
     else:
-        # Add new player
+        # Add new player for this difficulty
         scores.append(new_score)
         save_scores(scores)
         return {
             "status": "created",
-            "message": f"Score added for {new_score['name']}",
+            "message": f"Score added for {new_score['name']} on {new_score['difficulty']}",
             "score": new_score
         }
 

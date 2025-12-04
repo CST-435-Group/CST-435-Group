@@ -30,6 +30,8 @@ function RLProject() {
   const [showNamePrompt, setShowNamePrompt] = useState(false)
   const [playerName, setPlayerName] = useState('')
   const [nameInput, setNameInput] = useState('')
+  const [difficulty, setDifficulty] = useState('easy') // easy, medium, hard
+  const [selectedDifficulty, setSelectedDifficulty] = useState('easy')
   const scoreboardRef = useRef(null)
 
   const TRAINING_PASSWORD = 'John117@home'
@@ -102,12 +104,15 @@ function RLProject() {
     // Load previously saved name if available
     const savedName = localStorage.getItem('rl_platformer_player_name')
     setNameInput(savedName || '')
+    // Reset difficulty to 'easy' when opening prompt
+    setSelectedDifficulty('easy')
   }
 
   const handleNameSubmit = (e) => {
     e.preventDefault()
     const name = nameInput.trim() || 'Anonymous'
     setPlayerName(name)
+    setDifficulty(selectedDifficulty)
     // Save name for future games
     localStorage.setItem('rl_platformer_player_name', name)
     setShowNamePrompt(false)
@@ -117,7 +122,8 @@ function RLProject() {
       selectedModel,
       episodeModelPath,
       playingEpisode,
-      playerName: name
+      playerName: name,
+      difficulty: selectedDifficulty
     })
     setGameStarted(true)
   }
@@ -132,7 +138,7 @@ function RLProject() {
 
     // Save score if player won
     if (gameData.won && scoreboardRef.current) {
-      scoreboardRef.current(playerName, gameData.time, gameData.score, gameData.distance, gameData.won)
+      scoreboardRef.current(playerName, gameData.time, gameData.score, gameData.distance, gameData.won, difficulty)
     }
   }
 
@@ -272,8 +278,8 @@ function RLProject() {
       {showNamePrompt && (
         <div className="password-modal-overlay" onClick={handleNameCancel}>
           <div className="password-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>🎮 Enter Your Name</h3>
-            <p>Enter your name to track your score on the leaderboard!</p>
+            <h3>🎮 Start New Game</h3>
+            <p>Enter your name and select difficulty to compete on the leaderboard!</p>
             <form onSubmit={handleNameSubmit}>
               <input
                 type="text"
@@ -284,6 +290,52 @@ function RLProject() {
                 className="password-input"
                 maxLength={20}
               />
+
+              <div className="difficulty-selector">
+                <label className="difficulty-label">Select Difficulty:</label>
+                <div className="difficulty-options">
+                  <label className={`difficulty-option ${selectedDifficulty === 'easy' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="difficulty"
+                      value="easy"
+                      checked={selectedDifficulty === 'easy'}
+                      onChange={(e) => setSelectedDifficulty(e.target.value)}
+                    />
+                    <div className="difficulty-content">
+                      <span className="difficulty-name">🟢 Easy</span>
+                      <span className="difficulty-desc">Standard length</span>
+                    </div>
+                  </label>
+                  <label className={`difficulty-option ${selectedDifficulty === 'medium' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="difficulty"
+                      value="medium"
+                      checked={selectedDifficulty === 'medium'}
+                      onChange={(e) => setSelectedDifficulty(e.target.value)}
+                    />
+                    <div className="difficulty-content">
+                      <span className="difficulty-name">🟡 Medium</span>
+                      <span className="difficulty-desc">1.5x length</span>
+                    </div>
+                  </label>
+                  <label className={`difficulty-option ${selectedDifficulty === 'hard' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="difficulty"
+                      value="hard"
+                      checked={selectedDifficulty === 'hard'}
+                      onChange={(e) => setSelectedDifficulty(e.target.value)}
+                    />
+                    <div className="difficulty-content">
+                      <span className="difficulty-name">🔴 Hard</span>
+                      <span className="difficulty-desc">2x length</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               <div className="password-actions">
                 <button type="submit" className="password-submit-btn">
                   Start Game
@@ -454,7 +506,7 @@ function RLProject() {
                 </button>
 
                 {/* Scoreboard - below the play button */}
-                <Scoreboard onNewScore={scoreboardRef} />
+                <Scoreboard onNewScore={scoreboardRef} difficulty={difficulty} />
 
                 <div className="features">
                   <div className="feature">
@@ -495,6 +547,7 @@ function RLProject() {
                   episodeModelPath={episodeModelPath || selectedModel?.path}
                   playingEpisode={playingEpisode}
                   onGameComplete={handleGameComplete}
+                  difficulty={difficulty}
                 />
               </div>
             )}

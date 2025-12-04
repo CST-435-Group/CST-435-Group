@@ -154,7 +154,7 @@ export const rlAPI = {
   exportEpisodeCheckpoint: (episode) => api.post(`/rl/checkpoints/export/${episode}`),
   exportEpisodeCheckpointONNX: (episode) => api.post(`/rl/checkpoints/export-onnx/${episode}`),
   // Scoreboard
-  getScores: (limit = 10) => api.get(`/rl/scores?limit=${limit}`),
+  getScores: (limit = 10, difficulty = 'easy') => api.get(`/rl/scores?limit=${limit}&difficulty=${difficulty}`),
   submitScore: (scoreData) => api.post('/rl/scores', scoreData),
   clearScores: () => api.delete('/rl/scores'),
 }
