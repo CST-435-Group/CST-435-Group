@@ -122,6 +122,25 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       if (!game.keys[e.key]) {
         game.keys[e.key] = true
       }
+
+      // Safety: If Shift is pressed while no movement keys are held, don't register it
+      // This prevents issues with browser Shift key handling
+      if (e.key === 'Shift') {
+        const hasMovementKey =
+          ('ArrowLeft' in game.keys) || ('ArrowRight' in game.keys) ||
+          ('a' in game.keys) || ('A' in game.keys) ||
+          ('d' in game.keys) || ('D' in game.keys)
+
+        if (!hasMovementKey) {
+          // Shift pressed alone - clear any stuck keys
+          delete game.keys['ArrowLeft']
+          delete game.keys['ArrowRight']
+          delete game.keys['a']
+          delete game.keys['A']
+          delete game.keys['d']
+          delete game.keys['D']
+        }
+      }
     }
 
     const handleKeyUp = (e) => {
@@ -131,6 +150,16 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       // Reset jump flag when jump keys are released
       if ([' ', 'ArrowUp', 'w', 'W'].includes(e.key)) {
         game.jumpKeyWasPressed = false
+      }
+
+      // Clear movement keys when Shift is released to prevent stuck movement
+      if (e.key === 'Shift') {
+        delete game.keys['ArrowLeft']
+        delete game.keys['ArrowRight']
+        delete game.keys['a']
+        delete game.keys['A']
+        delete game.keys['d']
+        delete game.keys['D']
       }
     }
 
