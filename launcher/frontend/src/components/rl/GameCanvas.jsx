@@ -139,8 +139,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
           delete game.keys['A']
           delete game.keys['d']
           delete game.keys['D']
-          // Also reset jump flag to prevent stuck jumps
-          game.jumpKeyWasPressed = false
+          // NOTE: Don't reset jump flag here - only in keyUp to prevent repeated jumps
         }
       }
     }

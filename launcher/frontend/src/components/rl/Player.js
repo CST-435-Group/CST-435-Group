@@ -31,11 +31,29 @@ export class Player {
       this.velocityY = this.maxFallSpeed
     }
 
-    // Apply velocity
+    // Apply horizontal velocity with collision detection
     this.x += this.velocityX
+
+    // Check horizontal collision with platforms
+    for (const platform of platforms) {
+      if (this.checkHorizontalCollision(platform)) {
+        // Stop horizontal movement and push player out
+        if (this.velocityX > 0) {
+          // Moving right, hit left side of platform
+          this.x = platform.x - this.width
+        } else if (this.velocityX < 0) {
+          // Moving left, hit right side of platform
+          this.x = platform.x + platform.width
+        }
+        this.velocityX = 0
+        break
+      }
+    }
+
+    // Apply vertical velocity
     this.y += this.velocityY
 
-    // Check ground collision
+    // Check ground collision (vertical - can jump up through platforms)
     this.isOnGround = false
     for (const platform of platforms) {
       if (this.checkPlatformCollision(platform)) {
@@ -53,6 +71,26 @@ export class Player {
     if (this.y > 1200) {
       this.die()
     }
+  }
+
+  checkHorizontalCollision(platform) {
+    // Only check horizontal collision when moving horizontally
+    if (this.velocityX === 0) return false
+
+    // Check if player overlaps with platform horizontally and vertically
+    const horizontalOverlap =
+      this.x < platform.x + platform.width &&
+      this.x + this.width > platform.x
+
+    const verticalOverlap =
+      this.y < platform.y + platform.height &&
+      this.y + this.height > platform.y
+
+    // Only collide if we're not landing on top (allow jumping through from below)
+    // We're moving horizontally into the side of the platform
+    const notLandingOnTop = this.y + this.height <= platform.y + 10
+
+    return horizontalOverlap && verticalOverlap && !notLandingOnTop
   }
 
   checkPlatformCollision(platform) {
