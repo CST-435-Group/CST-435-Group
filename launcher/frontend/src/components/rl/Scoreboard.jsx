@@ -11,6 +11,11 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulty)
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+
+  const ADMIN_PASSWORD = 'John117@home'
 
   useEffect(() => {
     loadScores()
@@ -68,18 +73,43 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
     }
   }
 
-  const clearScores = async () => {
+  const handleClearClick = () => {
+    setShowPasswordPrompt(true)
+    setPasswordInput('')
+    setPasswordError('')
+  }
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault()
+
+    if (passwordInput !== ADMIN_PASSWORD) {
+      setPasswordError('Incorrect password. Access denied.')
+      setPasswordInput('')
+      return
+    }
+
+    // Password correct, proceed with clearing
+    setShowPasswordPrompt(false)
+    setPasswordInput('')
+    setPasswordError('')
+
     if (!window.confirm('Are you sure you want to clear ALL scores from the global leaderboard? This will affect all players!')) {
       return
     }
 
     try {
       await rlAPI.clearScores()
-      setScores([])
+      await loadScores() // Reload to show empty leaderboard
     } catch (err) {
       console.error('Failed to clear scores:', err)
       alert('Failed to clear scores. Please try again.')
     }
+  }
+
+  const handlePasswordCancel = () => {
+    setShowPasswordPrompt(false)
+    setPasswordInput('')
+    setPasswordError('')
   }
 
   const formatTime = (seconds) => {
@@ -101,12 +131,39 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
     <div className="scoreboard-container">
       <div className="scoreboard-header">
         <h3>🏆 Global Leaderboard - Best Times</h3>
-        {scores.length > 0 && (
-          <button onClick={clearScores} className="clear-scores-btn" title="Clear all scores">
-            🗑️ Clear All
-          </button>
-        )}
+        <button onClick={handleClearClick} className="clear-scores-btn" title="Clear all scores (requires password)">
+          🔒 Clear All
+        </button>
       </div>
+
+      {/* Password Prompt Modal */}
+      {showPasswordPrompt && (
+        <div className="password-modal-overlay" onClick={handlePasswordCancel}>
+          <div className="password-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>🔒 Admin Access Required</h3>
+            <p>Enter password to clear the leaderboard</p>
+            <form onSubmit={handlePasswordSubmit}>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Enter admin password"
+                autoFocus
+                className="password-input"
+              />
+              {passwordError && <div className="password-error">{passwordError}</div>}
+              <div className="password-actions">
+                <button type="submit" className="password-submit-btn">
+                  Clear Scores
+                </button>
+                <button type="button" onClick={handlePasswordCancel} className="password-cancel-btn">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Difficulty Tabs */}
       <div className="difficulty-tabs">
