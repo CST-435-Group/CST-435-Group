@@ -94,15 +94,20 @@ export class Player {
       this.y < platform.y + platform.height &&
       this.y + this.height > platform.y
 
-    // Don't apply horizontal collision if player is standing on top of the platform
-    // Check if player's bottom is within a few pixels of platform top (standing on it)
     const playerBottom = this.y + this.height
     const platformTop = platform.y
     const platformBottom = platform.y + platform.height
-    const isStandingOnTop = Math.abs(playerBottom - platformTop) < 5
 
-    // Don't collide horizontally if we're on top of this platform
-    if (isStandingOnTop) return false
+    // Check if we're actually standing on top of THIS platform
+    // (not just at the same height as another platform)
+    const feetAtSameLevel = Math.abs(playerBottom - platformTop) < 5
+    const playerCenterX = this.x + this.width / 2
+    const horizontallyOnPlatform = playerCenterX > platform.x && playerCenterX < platform.x + platform.width
+    const isStandingOnThisPlatform = feetAtSameLevel && horizontallyOnPlatform
+
+    // Don't collide horizontally if we're actually standing on top of THIS platform
+    // (allows walking along the platform without hitting its own edges)
+    if (isStandingOnThisPlatform) return false
 
     // Don't collide if player is below the platform (coming from underneath)
     // This prevents teleporting when jumping through bottom of platforms
