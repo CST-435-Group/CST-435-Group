@@ -109,16 +109,13 @@ export class Player {
     // (allows walking along the platform without hitting its own edges)
     if (isStandingOnThisPlatform) return false
 
-    // Don't collide if player is below the platform (coming from underneath)
+    // Don't collide if player is completely inside/below the platform (coming from underneath)
     // This prevents teleporting when jumping through bottom of platforms
+    // Only skip if player's TOP is below the platform's BOTTOM (fully inside/below)
     const playerTop = this.y
-    const playerComingFromBelow = playerTop < platformBottom && playerBottom > platformTop
+    const playerComingFromBelow = playerTop > platformBottom - 10
 
-    // Only collide if we're actually moving into the side of the platform
-    // (not if we're above it or jumping through from below)
-    const playerAbovePlatform = this.y + this.height < platform.y + 5
-
-    return horizontalOverlap && verticalOverlap && !playerAbovePlatform && !playerComingFromBelow
+    return horizontalOverlap && verticalOverlap && !playerComingFromBelow
   }
 
   checkPlatformCollision(platform, prevY) {
