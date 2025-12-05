@@ -99,13 +99,24 @@ function RLProject() {
   }
 
   const startGame = () => {
-    // Show name prompt before starting game
-    setShowNamePrompt(true)
-    // Load previously saved name if available
-    const savedName = localStorage.getItem('rl_platformer_player_name')
-    setNameInput(savedName || '')
-    // Reset difficulty to 'easy' when opening prompt
-    setSelectedDifficulty('easy')
+    // Check if name is already locked
+    const lockedName = localStorage.getItem('rl_platformer_player_name_locked')
+
+    if (lockedName) {
+      // Name is locked, use it directly and start game
+      setPlayerName(lockedName)
+      setDifficulty('easy')
+      setSelectedDifficulty('easy')
+      console.log('[RLProject] Using locked name:', lockedName)
+      setGameStarted(true)
+    } else {
+      // Show name prompt for first-time players
+      setShowNamePrompt(true)
+      const savedName = localStorage.getItem('rl_platformer_player_name')
+      setNameInput(savedName || '')
+      // Reset difficulty to 'easy' when opening prompt
+      setSelectedDifficulty('easy')
+    }
   }
 
   const handleNameSubmit = (e) => {
@@ -113,11 +124,13 @@ function RLProject() {
     const name = nameInput.trim() || 'Anonymous'
     setPlayerName(name)
     setDifficulty(selectedDifficulty)
-    // Save name for future games
+
+    // Lock the name permanently - can't change it after first submission
+    localStorage.setItem('rl_platformer_player_name_locked', name)
     localStorage.setItem('rl_platformer_player_name', name)
     setShowNamePrompt(false)
 
-    console.log('[RLProject] Starting game with:', {
+    console.log('[RLProject] Starting game with locked name:', {
       enableAI,
       selectedModel,
       episodeModelPath,
@@ -278,8 +291,11 @@ function RLProject() {
       {showNamePrompt && (
         <div className="password-modal-overlay" onClick={handleNameCancel}>
           <div className="password-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>🎮 Start New Game</h3>
-            <p>Enter your name and select difficulty to compete on the leaderboard!</p>
+            <h3>🎮 Choose Your Player Name</h3>
+            <p style={{ marginBottom: '10px' }}>Enter your name to track your score on the leaderboard!</p>
+            <p style={{ color: '#f44336', fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '15px', background: '#ffebee', padding: '10px', borderRadius: '6px' }}>
+              ⚠️ WARNING: Your name will be LOCKED and cannot be changed!
+            </p>
             <form onSubmit={handleNameSubmit}>
               <input
                 type="text"

@@ -1051,3 +1051,35 @@ def clear_scores():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear scores: {str(e)}")
+
+
+@router.delete("/scores/{player_name}/{difficulty}", summary="Delete Individual Score")
+def delete_score(player_name: str, difficulty: str):
+    """
+    Delete a specific player's score from a specific difficulty
+    Used to remove leaderboard abuse entries
+    """
+    try:
+        scores = load_scores()
+
+        # Find and remove the score
+        initial_count = len(scores)
+        scores = [s for s in scores if not (
+            s['name'].lower() == player_name.lower() and
+            s.get('difficulty', 'easy') == difficulty
+        )]
+
+        if len(scores) == initial_count:
+            raise HTTPException(status_code=404, detail=f"Score not found for {player_name} on {difficulty}")
+
+        save_scores(scores)
+
+        return {
+            "status": "success",
+            "message": f"Deleted score for {player_name} on {difficulty}",
+            "remaining_scores": len(scores)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete score: {str(e)}")

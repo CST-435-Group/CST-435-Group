@@ -14,6 +14,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null) // {name, difficulty} for score to delete
 
   const ADMIN_PASSWORD = 'John117@home'
 
@@ -74,6 +75,14 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
   }
 
   const handleClearClick = () => {
+    setDeleteTarget(null) // Clearing all
+    setShowPasswordPrompt(true)
+    setPasswordInput('')
+    setPasswordError('')
+  }
+
+  const handleDeleteClick = (playerName) => {
+    setDeleteTarget({ name: playerName, difficulty: selectedDifficulty })
     setShowPasswordPrompt(true)
     setPasswordInput('')
     setPasswordError('')
@@ -88,21 +97,35 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
       return
     }
 
-    // Password correct, proceed with clearing
+    // Password correct
     setShowPasswordPrompt(false)
     setPasswordInput('')
     setPasswordError('')
 
-    if (!window.confirm('Are you sure you want to clear ALL scores from the global leaderboard? This will affect all players!')) {
-      return
-    }
-
     try {
-      await rlAPI.clearScores()
-      await loadScores() // Reload to show empty leaderboard
+      if (deleteTarget) {
+        // Delete individual score
+        if (!window.confirm(`Are you sure you want to delete ${deleteTarget.name}'s score from the ${deleteTarget.difficulty} leaderboard?`)) {
+          setDeleteTarget(null)
+          return
+        }
+
+        await rlAPI.deleteScore(deleteTarget.name, deleteTarget.difficulty)
+        setDeleteTarget(null)
+        await loadScores() // Reload to show updated leaderboard
+      } else {
+        // Clear all scores
+        if (!window.confirm('Are you sure you want to clear ALL scores from the global leaderboard? This will affect all players!')) {
+          return
+        }
+
+        await rlAPI.clearScores()
+        await loadScores() // Reload to show empty leaderboard
+      }
     } catch (err) {
-      console.error('Failed to clear scores:', err)
-      alert('Failed to clear scores. Please try again.')
+      console.error('Failed to modify scores:', err)
+      alert('Failed to modify scores. Please try again.')
+      setDeleteTarget(null)
     }
   }
 
@@ -110,6 +133,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
     setShowPasswordPrompt(false)
     setPasswordInput('')
     setPasswordError('')
+    setDeleteTarget(null)
   }
 
   const formatTime = (seconds) => {
@@ -141,7 +165,11 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
         <div className="password-modal-overlay" onClick={handlePasswordCancel}>
           <div className="password-modal" onClick={(e) => e.stopPropagation()}>
             <h3>🔒 Admin Access Required</h3>
-            <p>Enter password to clear the leaderboard</p>
+            <p>
+              {deleteTarget
+                ? `Enter password to delete ${deleteTarget.name}'s score`
+                : 'Enter password to clear the leaderboard'}
+            </p>
             <form onSubmit={handlePasswordSubmit}>
               <input
                 type="password"
@@ -154,7 +182,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
               {passwordError && <div className="password-error">{passwordError}</div>}
               <div className="password-actions">
                 <button type="submit" className="password-submit-btn">
-                  Clear Scores
+                  {deleteTarget ? 'Delete Score' : 'Clear All'}
                 </button>
                 <button type="button" onClick={handlePasswordCancel} className="password-cancel-btn">
                   Cancel
@@ -211,6 +239,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
             <div className="col-score">Score</div>
             <div className="col-distance">Distance</div>
             <div className="col-date">Date</div>
+            <div className="col-actions">Actions</div>
           </div>
 
           {scores.map((score, index) => (
@@ -226,6 +255,15 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
               <div className="col-score">{score.score}</div>
               <div className="col-distance">{score.distance}m</div>
               <div className="col-date">{score.date}</div>
+              <div className="col-actions">
+                <button
+                  onClick={() => handleDeleteClick(score.name)}
+                  className="delete-score-btn"
+                  title="Delete this score (requires password)"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
           ))}
         </div>

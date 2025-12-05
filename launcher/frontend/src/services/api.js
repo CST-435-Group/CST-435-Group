@@ -157,6 +157,7 @@ export const rlAPI = {
   getScores: (limit = 10, difficulty = 'easy') => api.get(`/rl/scores?limit=${limit}&difficulty=${difficulty}`),
   submitScore: (scoreData) => api.post('/rl/scores', scoreData),
   clearScores: () => api.delete('/rl/scores'),
+  deleteScore: (playerName, difficulty) => api.delete(`/rl/scores/${encodeURIComponent(playerName)}/${difficulty}`),
 }
 
 // General API calls
