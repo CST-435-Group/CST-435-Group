@@ -25,18 +25,36 @@ export class Player {
   update(platforms, deltaTime = 1) {
     if (!this.isAlive) return
 
+    // Store previous position for collision detection
+    const prevX = this.x
+    const prevY = this.y
+
     // Apply gravity with deltaTime for frame-rate independence
     this.velocityY += this.gravity * deltaTime
     if (this.velocityY > this.maxFallSpeed) {
       this.velocityY = this.maxFallSpeed
     }
 
+    // Apply vertical velocity first (scaled by deltaTime)
+    this.y += this.velocityY * deltaTime
+
+    // Check vertical collision FIRST (landing on platforms has priority)
+    this.isOnGround = false
+    for (const platform of platforms) {
+      if (this.checkPlatformCollision(platform, prevY)) {
+        this.isOnGround = true
+        this.velocityY = 0
+        this.y = platform.y - this.height
+        break
+      }
+    }
+
     // Apply horizontal velocity with collision detection (scaled by deltaTime)
     this.x += this.velocityX * deltaTime
 
-    // Check horizontal collision with platforms
+    // Check horizontal collision with platforms (only if not landing on top)
     for (const platform of platforms) {
-      if (this.checkHorizontalCollision(platform)) {
+      if (this.checkHorizontalCollision(platform, prevX)) {
         // Stop horizontal movement and push player out
         if (this.velocityX > 0) {
           // Moving right, hit left side of platform
@@ -50,20 +68,6 @@ export class Player {
       }
     }
 
-    // Apply vertical velocity (scaled by deltaTime)
-    this.y += this.velocityY * deltaTime
-
-    // Check ground collision (vertical - can jump up through platforms)
-    this.isOnGround = false
-    for (const platform of platforms) {
-      if (this.checkPlatformCollision(platform)) {
-        this.isOnGround = true
-        this.velocityY = 0
-        this.y = platform.y - this.height
-        break
-      }
-    }
-
     // Track distance
     this.distance = Math.max(this.distance, this.x)
 
@@ -73,7 +77,7 @@ export class Player {
     }
   }
 
-  checkHorizontalCollision(platform) {
+  checkHorizontalCollision(platform, prevX) {
     // Only check horizontal collision when moving horizontally
     if (this.velocityX === 0) return false
 
@@ -86,30 +90,44 @@ export class Player {
       this.y < platform.y + platform.height &&
       this.y + this.height > platform.y
 
-    // Only collide if we're not landing on top (allow jumping through from below)
-    // We're moving horizontally into the side of the platform
-    const notLandingOnTop = this.y + this.height <= platform.y + 10
+    // Don't apply horizontal collision if player is standing on top of the platform
+    // Check if player's bottom is within a few pixels of platform top (standing on it)
+    const playerBottom = this.y + this.height
+    const platformTop = platform.y
+    const isStandingOnTop = Math.abs(playerBottom - platformTop) < 5
 
-    return horizontalOverlap && verticalOverlap && !notLandingOnTop
+    // Don't collide horizontally if we're on top of this platform
+    if (isStandingOnTop) return false
+
+    // Only collide if we're actually moving into the side of the platform
+    // (not if we're above it or jumping through from below)
+    const playerAbovePlatform = this.y + this.height < platform.y + 5
+
+    return horizontalOverlap && verticalOverlap && !playerAbovePlatform
   }
 
-  checkPlatformCollision(platform) {
-    // Check if player is falling and landing on top of platform
-    if (this.velocityY >= 0) {
-      const playerBottom = this.y + this.height
-      const platformTop = platform.y
+  checkPlatformCollision(platform, prevY) {
+    // Only check landing collision when falling or on the platform
+    if (this.velocityY < 0) return false // Moving up, don't land
 
-      // Check if player's feet are near platform top
-      if (
-        playerBottom >= platformTop &&
-        playerBottom <= platformTop + this.velocityY + this.gravity + 5 &&
-        this.x + this.width > platform.x &&
-        this.x < platform.x + platform.width
-      ) {
-        return true
-      }
-    }
-    return false
+    const playerBottom = this.y + this.height
+    const prevPlayerBottom = prevY + this.height
+    const platformTop = platform.y
+
+    // Check horizontal overlap
+    const horizontalOverlap =
+      this.x + this.width > platform.x &&
+      this.x < platform.x + platform.width
+
+    if (!horizontalOverlap) return false
+
+    // Check if we crossed the platform top this frame (prevents tunneling)
+    const crossedPlatform = prevPlayerBottom <= platformTop && playerBottom >= platformTop
+
+    // Or if we're very close to the top (already on it)
+    const onPlatform = playerBottom >= platformTop && playerBottom <= platformTop + Math.abs(this.velocityY) + 10
+
+    return crossedPlatform || onPlatform
   }
 
   moveLeft() {
