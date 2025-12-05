@@ -103,19 +103,16 @@ function RLProject() {
     const lockedName = localStorage.getItem('rl_platformer_player_name_locked')
 
     if (lockedName) {
-      // Name is locked, use it directly and start game
+      // Name is locked, use it directly and start game with selected difficulty
       setPlayerName(lockedName)
-      setDifficulty('easy')
-      setSelectedDifficulty('easy')
-      console.log('[RLProject] Using locked name:', lockedName)
+      setDifficulty(selectedDifficulty) // Use currently selected difficulty
+      console.log('[RLProject] Using locked name:', lockedName, 'difficulty:', selectedDifficulty)
       setGameStarted(true)
     } else {
       // Show name prompt for first-time players
       setShowNamePrompt(true)
       const savedName = localStorage.getItem('rl_platformer_player_name')
       setNameInput(savedName || '')
-      // Reset difficulty to 'easy' when opening prompt
-      setSelectedDifficulty('easy')
     }
   }
 
@@ -307,54 +304,9 @@ function RLProject() {
                 maxLength={20}
               />
 
-              <div className="difficulty-selector">
-                <label className="difficulty-label">Select Difficulty:</label>
-                <div className="difficulty-options">
-                  <label className={`difficulty-option ${selectedDifficulty === 'easy' ? 'selected' : ''}`}>
-                    <input
-                      type="radio"
-                      name="difficulty"
-                      value="easy"
-                      checked={selectedDifficulty === 'easy'}
-                      onChange={(e) => setSelectedDifficulty(e.target.value)}
-                    />
-                    <div className="difficulty-content">
-                      <span className="difficulty-name">🟢 Easy</span>
-                      <span className="difficulty-desc">Standard length</span>
-                    </div>
-                  </label>
-                  <label className={`difficulty-option ${selectedDifficulty === 'medium' ? 'selected' : ''}`}>
-                    <input
-                      type="radio"
-                      name="difficulty"
-                      value="medium"
-                      checked={selectedDifficulty === 'medium'}
-                      onChange={(e) => setSelectedDifficulty(e.target.value)}
-                    />
-                    <div className="difficulty-content">
-                      <span className="difficulty-name">🟡 Medium</span>
-                      <span className="difficulty-desc">1.5x length</span>
-                    </div>
-                  </label>
-                  <label className={`difficulty-option ${selectedDifficulty === 'hard' ? 'selected' : ''}`}>
-                    <input
-                      type="radio"
-                      name="difficulty"
-                      value="hard"
-                      checked={selectedDifficulty === 'hard'}
-                      onChange={(e) => setSelectedDifficulty(e.target.value)}
-                    />
-                    <div className="difficulty-content">
-                      <span className="difficulty-name">🔴 Hard</span>
-                      <span className="difficulty-desc">2x length</span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div className="password-actions">
+              <div className="password-actions" style={{ marginTop: '20px' }}>
                 <button type="submit" className="password-submit-btn">
-                  Start Game
+                  Lock Name & Continue
                 </button>
                 <button type="button" onClick={handleNameCancel} className="password-cancel-btn">
                   Cancel
@@ -516,6 +468,52 @@ function RLProject() {
                     )}
                   </div>
                 )}
+
+                {/* Difficulty Selector - always visible */}
+                <div className="difficulty-selector-main">
+                  <label className="difficulty-label">Select Difficulty:</label>
+                  <div className="difficulty-options">
+                    <label className={`difficulty-option ${selectedDifficulty === 'easy' ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="difficulty"
+                        value="easy"
+                        checked={selectedDifficulty === 'easy'}
+                        onChange={(e) => setSelectedDifficulty(e.target.value)}
+                      />
+                      <div className="difficulty-content">
+                        <span className="difficulty-name">🟢 Easy</span>
+                        <span className="difficulty-desc">Standard length</span>
+                      </div>
+                    </label>
+                    <label className={`difficulty-option ${selectedDifficulty === 'medium' ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="difficulty"
+                        value="medium"
+                        checked={selectedDifficulty === 'medium'}
+                        onChange={(e) => setSelectedDifficulty(e.target.value)}
+                      />
+                      <div className="difficulty-content">
+                        <span className="difficulty-name">🟡 Medium</span>
+                        <span className="difficulty-desc">1.5x length</span>
+                      </div>
+                    </label>
+                    <label className={`difficulty-option ${selectedDifficulty === 'hard' ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="difficulty"
+                        value="hard"
+                        checked={selectedDifficulty === 'hard'}
+                        onChange={(e) => setSelectedDifficulty(e.target.value)}
+                      />
+                      <div className="difficulty-content">
+                        <span className="difficulty-name">🔴 Hard</span>
+                        <span className="difficulty-desc">2x length</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
 
                 <button className="start-button" onClick={startGame}>
                   {enableAI ? '🏁 Start Race vs AI' : '🎮 Start Solo Game'}

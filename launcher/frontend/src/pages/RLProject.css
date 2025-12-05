@@ -198,9 +198,18 @@
   background: #e0e0e0;
 }
 
-/* Difficulty Selector */
+/* Difficulty Selector (Modal version) */
 .difficulty-selector {
   margin: 20px 0;
+}
+
+/* Difficulty Selector (Main page version - above play button) */
+.difficulty-selector-main {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  margin: 30px 0;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .difficulty-label {
@@ -211,10 +220,21 @@
   font-size: 1rem;
 }
 
+.difficulty-selector-main .difficulty-label {
+  font-size: 1.1rem;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
 .difficulty-options {
   display: flex;
   gap: 10px;
   flex-direction: column;
+}
+
+.difficulty-selector-main .difficulty-options {
+  flex-direction: row;
+  justify-content: center;
 }
 
 .difficulty-option {
@@ -228,15 +248,26 @@
   background: #f9f9f9;
 }
 
+.difficulty-selector-main .difficulty-option {
+  flex: 1;
+  max-width: 200px;
+  padding: 15px 20px;
+}
+
 .difficulty-option:hover {
   border-color: #667eea;
   background: #f0f4ff;
+  transform: translateY(-2px);
 }
 
 .difficulty-option.selected {
   border-color: #667eea;
   background: linear-gradient(135deg, #f0f4ff, #e8f0ff);
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.difficulty-selector-main .difficulty-option.selected {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .difficulty-option input[type="radio"] {
