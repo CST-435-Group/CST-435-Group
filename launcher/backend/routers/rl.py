@@ -3,7 +3,7 @@ RL Platformer Router
 Proxies requests to RL backend
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -15,6 +15,10 @@ import asyncio
 import time
 import signal
 from pathlib import Path
+import bcrypt
+import jwt
+from datetime import datetime, timedelta
+import uuid
 
 router = APIRouter(prefix="/rl", tags=["RL Platformer"])
 
@@ -62,6 +66,26 @@ class ScoreEntry(BaseModel):
     difficulty: str = 'easy'  # easy, medium, hard
     timestamp: Optional[str] = None
     date: Optional[str] = None
+
+
+class UserRegister(BaseModel):
+    """User registration request"""
+    username: str
+    password: str
+
+
+class UserLogin(BaseModel):
+    """User login request"""
+    username: str
+    password: str
+
+
+class GameMetrics(BaseModel):
+    """Game metrics for a single session"""
+    jumps: int
+    points: int
+    distance: int
+    time_played: float
 
 
 @router.get("/", summary="RL API Info")
@@ -112,6 +136,119 @@ def debug_paths():
             }
             for p in possible_paths
         ]
+    }
+
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@router.post("/auth/register", summary="Register New User")
+def register_user(user_data: UserRegister):
+    """
+    Register a new user account
+    Returns JWT token on success
+    """
+    users = load_users()
+
+    # Check if username already exists
+    if any(u['username'].lower() == user_data.username.lower() for u in users):
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    # Validate username (3-20 chars, alphanumeric + underscore)
+    if not user_data.username or len(user_data.username) < 3 or len(user_data.username) > 20:
+        raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
+
+    # Validate password (minimum 6 characters)
+    if not user_data.password or len(user_data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    # Create new user
+    user_id = str(uuid.uuid4())
+    new_user = {
+        "user_id": user_id,
+        "username": user_data.username,
+        "password_hash": hash_password(user_data.password),
+        "created_at": datetime.utcnow().isoformat(),
+        "total_games": 0,
+        "total_jumps": 0,
+        "total_points": 0,
+        "total_distance": 0,
+        "total_playtime": 0.0
+    }
+
+    users.append(new_user)
+    save_users(users)
+
+    # Generate JWT token
+    token = create_jwt_token(user_id, user_data.username)
+
+    return {
+        "status": "success",
+        "message": f"User {user_data.username} registered successfully",
+        "token": token,
+        "user": {
+            "user_id": user_id,
+            "username": user_data.username,
+            "created_at": new_user["created_at"]
+        }
+    }
+
+
+@router.post("/auth/login", summary="User Login")
+def login_user(user_data: UserLogin):
+    """
+    Login with username and password
+    Returns JWT token on success
+    """
+    users = load_users()
+
+    # Find user
+    user = next((u for u in users if u['username'].lower() == user_data.username.lower()), None)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    # Verify password
+    if not verify_password(user_data.password, user['password_hash']):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    # Generate JWT token
+    token = create_jwt_token(user['user_id'], user['username'])
+
+    return {
+        "status": "success",
+        "message": f"Logged in as {user['username']}",
+        "token": token,
+        "user": {
+            "user_id": user['user_id'],
+            "username": user['username'],
+            "created_at": user['created_at']
+        }
+    }
+
+
+@router.get("/auth/verify", summary="Verify Token")
+def verify_token(authorization: Optional[str] = Header(None)):
+    """
+    Verify JWT token and get current user info
+    """
+    user = get_current_user(authorization)
+
+    return {
+        "status": "valid",
+        "user": {
+            "user_id": user['user_id'],
+            "username": user['username'],
+            "created_at": user['created_at'],
+            "stats": {
+                "total_games": user.get('total_games', 0),
+                "total_jumps": user.get('total_jumps', 0),
+                "total_points": user.get('total_points', 0),
+                "total_distance": user.get('total_distance', 0),
+                "total_playtime": user.get('total_playtime', 0.0)
+            }
+        }
     }
 
 
@@ -924,14 +1061,132 @@ def get_onnx_model(episode: int):
     )
 
 
-# Scoreboard Database Path
-SCORES_DB_PATH = Path(__file__).parent.parent / "data" / "rl_scores.json"
+# Database Paths
+DATA_DIR = Path(__file__).parent.parent / "data"
+SCORES_DB_PATH = DATA_DIR / "rl_scores.json"
+USERS_DB_PATH = DATA_DIR / "rl_users.json"
+METRICS_DB_PATH = DATA_DIR / "rl_metrics.json"
 
+# JWT Secret (in production, use environment variable)
+JWT_SECRET = "your-secret-key-change-in-production"
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_DAYS = 30
+
+
+# ============================================================================
+# USER AUTHENTICATION FUNCTIONS
+# ============================================================================
+
+def load_users() -> List[Dict[str, Any]]:
+    """Load users from JSON file"""
+    if not USERS_DB_PATH.exists():
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        return []
+
+    try:
+        with open(USERS_DB_PATH, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading users: {e}")
+        return []
+
+
+def save_users(users: List[Dict[str, Any]]):
+    """Save users to JSON file"""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with open(USERS_DB_PATH, 'w') as f:
+            json.dump(users, f, indent=2)
+    except Exception as e:
+        print(f"Error saving users: {e}")
+        raise
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against a hash"""
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+
+def create_jwt_token(user_id: str, username: str) -> str:
+    """Create a JWT token for authentication"""
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "exp": datetime.utcnow() + timedelta(days=JWT_EXPIRATION_DAYS),
+        "iat": datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
+    """Verify and decode a JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Get current user from Authorization header"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = authorization.replace("Bearer ", "")
+    payload = verify_jwt_token(token)
+
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    users = load_users()
+    user = next((u for u in users if u['user_id'] == payload['user_id']), None)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
+
+
+# ============================================================================
+# USER METRICS FUNCTIONS
+# ============================================================================
+
+def update_user_metrics(user_id: str, metrics: GameMetrics):
+    """Update user's cumulative metrics"""
+    users = load_users()
+
+    user = next((u for u in users if u['user_id'] == user_id), None)
+    if not user:
+        return False
+
+    # Update cumulative stats
+    user['total_games'] = user.get('total_games', 0) + 1
+    user['total_jumps'] = user.get('total_jumps', 0) + metrics.jumps
+    user['total_points'] = user.get('total_points', 0) + metrics.points
+    user['total_distance'] = user.get('total_distance', 0) + metrics.distance
+    user['total_playtime'] = user.get('total_playtime', 0.0) + metrics.time_played
+
+    save_users(users)
+    return True
+
+
+# ============================================================================
+# SCOREBOARD FUNCTIONS
+# ============================================================================
 
 def load_scores() -> List[Dict[str, Any]]:
     """Load scores from JSON file"""
     if not SCORES_DB_PATH.exists():
-        SCORES_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         return []
 
     try:
@@ -977,12 +1232,23 @@ def get_scores(limit: int = 10, difficulty: str = 'easy'):
 
 
 @router.post("/scores", summary="Submit Score to Leaderboard")
-def submit_score(score_entry: ScoreEntry):
+def submit_score(score_entry: ScoreEntry, authorization: Optional[str] = Header(None)):
     """
     Submit a new score to the global leaderboard
-    If player name already exists for this difficulty, only updates if new time is better (faster)
+    If logged in, score is linked to user_id
+    If player already has a score for this difficulty, only updates if new time is better (faster)
     """
     from datetime import datetime
+
+    # Get user if authenticated
+    user = None
+    user_id = None
+    try:
+        if authorization:
+            user = get_current_user(authorization)
+            user_id = user['user_id']
+    except:
+        pass  # Allow unauthenticated submissions
 
     # Load existing scores
     scores = load_scores()
@@ -995,16 +1261,24 @@ def submit_score(score_entry: ScoreEntry):
         "distance": score_entry.distance,
         "difficulty": score_entry.difficulty,
         "timestamp": datetime.utcnow().isoformat(),
-        "date": datetime.utcnow().strftime("%Y-%m-%d")
+        "date": datetime.utcnow().strftime("%Y-%m-%d"),
+        "user_id": user_id  # Link to user if authenticated
     }
 
     # Check if player already exists for this difficulty
     existing_index = None
     for i, s in enumerate(scores):
-        if (s['name'].lower() == new_score['name'].lower() and
-            s.get('difficulty', 'easy') == new_score['difficulty']):
-            existing_index = i
-            break
+        # Match by user_id if authenticated, otherwise by name
+        if user_id:
+            if s.get('user_id') == user_id and s.get('difficulty', 'easy') == new_score['difficulty']:
+                existing_index = i
+                break
+        else:
+            if (s['name'].lower() == new_score['name'].lower() and
+                s.get('difficulty', 'easy') == new_score['difficulty'] and
+                not s.get('user_id')):  # Only match unlinked scores
+                existing_index = i
+                break
 
     if existing_index is not None:
         # Only update if new time is better (faster)
@@ -1083,3 +1357,60 @@ def delete_score(player_name: str, difficulty: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete score: {str(e)}")
+
+
+# ============================================================================
+# USER METRICS ENDPOINTS
+# ============================================================================
+
+@router.post("/metrics/submit", summary="Submit Game Metrics")
+def submit_metrics(metrics: GameMetrics, authorization: Optional[str] = Header(None)):
+    """
+    Submit game session metrics (jumps, points, distance, time)
+    Updates user's cumulative statistics
+    Requires authentication
+    """
+    user = get_current_user(authorization)
+
+    success = update_user_metrics(user['user_id'], metrics)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update metrics")
+
+    # Get updated user stats
+    users = load_users()
+    updated_user = next((u for u in users if u['user_id'] == user['user_id']), None)
+
+    return {
+        "status": "success",
+        "message": "Metrics updated successfully",
+        "stats": {
+            "total_games": updated_user.get('total_games', 0),
+            "total_jumps": updated_user.get('total_jumps', 0),
+            "total_points": updated_user.get('total_points', 0),
+            "total_distance": updated_user.get('total_distance', 0),
+            "total_playtime": updated_user.get('total_playtime', 0.0)
+        }
+    }
+
+
+@router.get("/metrics/stats", summary="Get User Stats")
+def get_user_stats(authorization: Optional[str] = Header(None)):
+    """
+    Get current user's statistics
+    Requires authentication
+    """
+    user = get_current_user(authorization)
+
+    return {
+        "status": "success",
+        "username": user['username'],
+        "stats": {
+            "total_games": user.get('total_games', 0),
+            "total_jumps": user.get('total_jumps', 0),
+            "total_points": user.get('total_points', 0),
+            "total_distance": user.get('total_distance', 0),
+            "total_playtime": user.get('total_playtime', 0.0)
+        },
+        "created_at": user['created_at']
+    }

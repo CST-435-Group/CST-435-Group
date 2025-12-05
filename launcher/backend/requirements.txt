@@ -22,3 +22,7 @@ Pillow==10.2.0
 
 # Utilities - pinned versions
 python-dotenv==1.0.0
+
+# Authentication
+bcrypt==4.1.2
+PyJWT==2.8.0

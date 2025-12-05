@@ -155,9 +155,24 @@ export const rlAPI = {
   exportEpisodeCheckpointONNX: (episode) => api.post(`/rl/checkpoints/export-onnx/${episode}`),
   // Scoreboard
   getScores: (limit = 10, difficulty = 'easy') => api.get(`/rl/scores?limit=${limit}&difficulty=${difficulty}`),
-  submitScore: (scoreData) => api.post('/rl/scores', scoreData),
+  submitScore: (scoreData, token) => api.post('/rl/scores', scoreData, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+  }),
   clearScores: () => api.delete('/rl/scores'),
   deleteScore: (playerName, difficulty) => api.delete(`/rl/scores/${encodeURIComponent(playerName)}/${difficulty}`),
+  // Authentication
+  register: (username, password) => api.post('/rl/auth/register', { username, password }),
+  login: (username, password) => api.post('/rl/auth/login', { username, password }),
+  verifyToken: (token) => api.get('/rl/auth/verify', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }),
+  // Metrics
+  submitMetrics: (metrics, token) => api.post('/rl/metrics/submit', metrics, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }),
+  getStats: (token) => api.get('/rl/metrics/stats', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }),
 }
 
 // General API calls
