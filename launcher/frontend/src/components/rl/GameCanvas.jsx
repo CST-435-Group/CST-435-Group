@@ -223,7 +223,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
             won: true,
             time: finalTime,
             score: game.player.score,
-            distance: Math.floor(game.player.distance)
+            distance: Math.floor(game.player.distance),
+            jumps: game.player.jumpCount || 0
           })
         }
       } else if (humanLost || (enableAI && aiWon)) {
@@ -244,7 +245,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
             won: false,
             time: finalTime,
             score: game.player.score,
-            distance: Math.floor(game.player.distance)
+            distance: Math.floor(game.player.distance),
+            jumps: game.player.jumpCount || 0
           })
         }
       } else {

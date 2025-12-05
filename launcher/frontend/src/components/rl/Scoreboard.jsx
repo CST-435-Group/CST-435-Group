@@ -6,7 +6,7 @@ import './Scoreboard.css'
  * Scoreboard component for displaying and managing player scores
  * Uses backend API with shared database for global leaderboard
  */
-export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
+export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken = null, currentUser = null }) {
   const [scores, setScores] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -15,8 +15,27 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
   const [passwordInput, setPasswordInput] = useState('')
   const [passwordError, setPasswordError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null) // {name, difficulty} for score to delete
+  const [userStats, setUserStats] = useState(null)
 
   const ADMIN_PASSWORD = 'John117@home'
+
+  // Load user stats when auth token changes
+  useEffect(() => {
+    if (authToken && currentUser) {
+      loadUserStats()
+    } else {
+      setUserStats(null)
+    }
+  }, [authToken, currentUser])
+
+  const loadUserStats = async () => {
+    try {
+      const response = await rlAPI.getStats(authToken)
+      setUserStats(response.data.stats)
+    } catch (err) {
+      console.error('Failed to load user stats:', err)
+    }
+  }
 
   useEffect(() => {
     loadScores()
@@ -49,7 +68,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
     }
   }
 
-  const addScore = async (playerName, time, score, distance, won, gameDifficulty) => {
+  const addScore = async (playerName, time, score, distance, won, gameDifficulty, token) => {
     // Only save winning scores
     if (!won) return
 
@@ -63,11 +82,14 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
       }
 
       console.log('[Scoreboard] Submitting score:', scoreData)
-      const response = await rlAPI.submitScore(scoreData)
+      const response = await rlAPI.submitScore(scoreData, token)
       console.log('[Scoreboard] Server response:', response.data)
 
-      // Reload scores to get updated leaderboard
+      // Reload scores and user stats to get updated data
       await loadScores()
+      if (token && currentUser) {
+        await loadUserStats()
+      }
     } catch (err) {
       console.error('Failed to submit score:', err)
       // Don't show error to user, just log it
@@ -266,6 +288,53 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy' }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* User Stats Section */}
+      {userStats && currentUser && (
+        <div style={{
+          background: 'linear-gradient(135deg, #f0f4ff, #e8f0ff)',
+          borderRadius: '10px',
+          padding: '20px',
+          marginTop: '30px',
+          border: '2px solid #667eea'
+        }}>
+          <h4 style={{ margin: '0 0 15px 0', color: '#667eea', fontSize: '1.3rem' }}>
+            📊 Your Stats
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px' }}>
+            <div style={{ textAlign: 'center', padding: '10px', background: 'white', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#667eea' }}>
+                {userStats.total_games}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '3px' }}>Games Played</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '10px', background: 'white', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#667eea' }}>
+                {userStats.total_jumps}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '3px' }}>Total Jumps</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '10px', background: 'white', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#667eea' }}>
+                {userStats.total_points}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '3px' }}>Total Points</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '10px', background: 'white', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#667eea' }}>
+                {userStats.total_distance}m
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '3px' }}>Total Distance</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '10px', background: 'white', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#667eea' }}>
+                {Math.round(userStats.total_playtime / 60)}min
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '3px' }}>Playtime</div>
+            </div>
+          </div>
         </div>
       )}
 

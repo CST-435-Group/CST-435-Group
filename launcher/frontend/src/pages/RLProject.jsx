@@ -26,10 +26,14 @@ function RLProject() {
   const [availableModels, setAvailableModels] = useState([]) // List of available models
   const [selectedModel, setSelectedModel] = useState(null) // Currently selected model for gameplay
 
-  // Scoreboard state
-  const [showNamePrompt, setShowNamePrompt] = useState(false)
-  const [playerName, setPlayerName] = useState('')
-  const [nameInput, setNameInput] = useState('')
+  // User authentication state
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authMode, setAuthMode] = useState('login') // 'login' or 'register'
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authToken, setAuthToken] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
   const [difficulty, setDifficulty] = useState('easy') // easy, medium, hard
   const [selectedDifficulty, setSelectedDifficulty] = useState('easy')
   const scoreboardRef = useRef(null)
@@ -40,7 +44,26 @@ function RLProject() {
   useEffect(() => {
     const authenticated = sessionStorage.getItem('rl_training_auth') === 'true'
     setIsTrainingAuthenticated(authenticated)
+
+    // Check for saved auth token
+    const savedToken = localStorage.getItem('rl_auth_token')
+    if (savedToken) {
+      verifyAndLoadUser(savedToken)
+    }
   }, [])
+
+  const verifyAndLoadUser = async (token) => {
+    try {
+      const response = await rlAPI.verifyToken(token)
+      setAuthToken(token)
+      setCurrentUser(response.data.user)
+    } catch (error) {
+      console.error('Token verification failed:', error)
+      localStorage.removeItem('rl_auth_token')
+      setAuthToken(null)
+      setCurrentUser(null)
+    }
+  }
 
   // Check backend status on mount
   useEffect(() => {
@@ -99,56 +122,112 @@ function RLProject() {
   }
 
   const startGame = () => {
-    // Check if name is already locked
-    const lockedName = localStorage.getItem('rl_platformer_player_name_locked')
-
-    if (lockedName) {
-      // Name is locked, use it directly and start game with selected difficulty
-      setPlayerName(lockedName)
-      setDifficulty(selectedDifficulty) // Use currently selected difficulty
-      console.log('[RLProject] Using locked name:', lockedName, 'difficulty:', selectedDifficulty)
-      setGameStarted(true)
-    } else {
-      // Show name prompt for first-time players
-      setShowNamePrompt(true)
-      const savedName = localStorage.getItem('rl_platformer_player_name')
-      setNameInput(savedName || '')
+    // Check if user is logged in
+    if (!currentUser) {
+      // Show login/register modal
+      setShowAuthModal(true)
+      setAuthMode('login')
+      setAuthError('')
+      return
     }
-  }
 
-  const handleNameSubmit = (e) => {
-    e.preventDefault()
-    const name = nameInput.trim() || 'Anonymous'
-    setPlayerName(name)
+    // User is authenticated, start game
     setDifficulty(selectedDifficulty)
-
-    // Lock the name permanently - can't change it after first submission
-    localStorage.setItem('rl_platformer_player_name_locked', name)
-    localStorage.setItem('rl_platformer_player_name', name)
-    setShowNamePrompt(false)
-
-    console.log('[RLProject] Starting game with locked name:', {
+    console.log('[RLProject] Starting game:', {
       enableAI,
       selectedModel,
       episodeModelPath,
       playingEpisode,
-      playerName: name,
+      username: currentUser.username,
       difficulty: selectedDifficulty
     })
     setGameStarted(true)
   }
 
-  const handleNameCancel = () => {
-    setShowNamePrompt(false)
-    setNameInput('')
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault()
+    setAuthError('')
+
+    try {
+      if (authMode === 'register') {
+        // Register new user
+        const response = await rlAPI.register(username, password)
+        const { token, user } = response.data
+
+        // Save token and user info
+        localStorage.setItem('rl_auth_token', token)
+        setAuthToken(token)
+        setCurrentUser(user)
+        setShowAuthModal(false)
+
+        // Start game automatically after registration
+        setDifficulty(selectedDifficulty)
+        setGameStarted(true)
+      } else {
+        // Login existing user
+        const response = await rlAPI.login(username, password)
+        const { token, user } = response.data
+
+        // Save token and user info
+        localStorage.setItem('rl_auth_token', token)
+        setAuthToken(token)
+        setCurrentUser(user)
+        setShowAuthModal(false)
+
+        // Start game automatically after login
+        setDifficulty(selectedDifficulty)
+        setGameStarted(true)
+      }
+    } catch (error) {
+      console.error('Auth error:', error)
+      setAuthError(error.response?.data?.detail || 'Authentication failed. Please try again.')
+      setPassword('')
+    }
   }
 
-  const handleGameComplete = (gameData) => {
+  const handleAuthCancel = () => {
+    setShowAuthModal(false)
+    setUsername('')
+    setPassword('')
+    setAuthError('')
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('rl_auth_token')
+    setAuthToken(null)
+    setCurrentUser(null)
+    setGameStarted(false)
+  }
+
+  const handleGameComplete = async (gameData) => {
     console.log('[RLProject] Game completed:', gameData)
 
+    // Submit metrics if authenticated
+    if (currentUser && authToken) {
+      try {
+        await rlAPI.submitMetrics({
+          jumps: gameData.jumps || 0,
+          points: gameData.score || 0,
+          distance: gameData.distance || 0,
+          time_played: gameData.time || 0
+        }, authToken)
+        console.log('[RLProject] Metrics submitted successfully')
+      } catch (error) {
+        console.error('[RLProject] Failed to submit metrics:', error)
+      }
+    }
+
     // Save score if player won
-    if (gameData.won && scoreboardRef.current) {
-      scoreboardRef.current(playerName, gameData.time, gameData.score, gameData.distance, gameData.won, difficulty)
+    if (gameData.won && scoreboardRef.current && currentUser) {
+      scoreboardRef.current(
+        currentUser.username,
+        gameData.time,
+        gameData.score,
+        gameData.distance,
+        gameData.won,
+        difficulty,
+        authToken
+      )
     }
   }
 
@@ -284,35 +363,102 @@ function RLProject() {
         </div>
       )}
 
-      {/* Name Prompt Modal */}
-      {showNamePrompt && (
-        <div className="password-modal-overlay" onClick={handleNameCancel}>
+      {/* Login/Register Modal */}
+      {showAuthModal && (
+        <div className="password-modal-overlay" onClick={handleAuthCancel}>
           <div className="password-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>🎮 Choose Your Player Name</h3>
-            <p style={{ marginBottom: '10px' }}>Enter your name to track your score on the leaderboard!</p>
-            <p style={{ color: '#f44336', fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '15px', background: '#ffebee', padding: '10px', borderRadius: '6px' }}>
-              ⚠️ WARNING: Your name will be LOCKED and cannot be changed!
+            <h3>{authMode === 'login' ? '🔐 Login' : '📝 Create Account'}</h3>
+            <p style={{ marginBottom: '20px', color: '#666' }}>
+              {authMode === 'login'
+                ? 'Login to track your stats and compete on the leaderboard!'
+                : 'Create an account to save your progress and stats!'}
             </p>
-            <form onSubmit={handleNameSubmit}>
+            <form onSubmit={handleAuthSubmit}>
               <input
                 type="text"
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                placeholder="Your name (or leave blank for Anonymous)"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Username (3-20 characters)"
                 autoFocus
                 className="password-input"
+                minLength={3}
                 maxLength={20}
+                required
               />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password (minimum 6 characters)"
+                className="password-input"
+                minLength={6}
+                required
+                style={{ marginTop: '10px' }}
+              />
+
+              {authError && (
+                <div className="password-error" style={{ marginTop: '10px' }}>
+                  {authError}
+                </div>
+              )}
 
               <div className="password-actions" style={{ marginTop: '20px' }}>
                 <button type="submit" className="password-submit-btn">
-                  Lock Name & Continue
+                  {authMode === 'login' ? 'Login' : 'Create Account'}
                 </button>
-                <button type="button" onClick={handleNameCancel} className="password-cancel-btn">
+                <button type="button" onClick={handleAuthCancel} className="password-cancel-btn">
                   Cancel
                 </button>
               </div>
             </form>
+
+            <div style={{ marginTop: '15px', textAlign: 'center', borderTop: '1px solid #eee', paddingTop: '15px' }}>
+              {authMode === 'login' ? (
+                <p style={{ margin: 0, color: '#666' }}>
+                  Don't have an account?{' '}
+                  <button
+                    onClick={() => {
+                      setAuthMode('register')
+                      setAuthError('')
+                      setUsername('')
+                      setPassword('')
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#667eea',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Register here
+                  </button>
+                </p>
+              ) : (
+                <p style={{ margin: 0, color: '#666' }}>
+                  Already have an account?{' '}
+                  <button
+                    onClick={() => {
+                      setAuthMode('login')
+                      setAuthError('')
+                      setUsername('')
+                      setPassword('')
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#667eea',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Login here
+                  </button>
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -515,12 +661,59 @@ function RLProject() {
                   </div>
                 </div>
 
+                {/* User Info Display */}
+                {currentUser && (
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '10px',
+                    padding: '15px 20px',
+                    margin: '20px 0',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>Logged in as</p>
+                      <p style={{ margin: '3px 0 0 0', fontSize: '1.2rem', fontWeight: 'bold', color: '#667eea' }}>
+                        {currentUser.username}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      style={{
+                        background: '#f44336',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '0.9rem',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseOver={(e) => e.target.style.background = '#da190b'}
+                      onMouseOut={(e) => e.target.style.background = '#f44336'}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+
                 <button className="start-button" onClick={startGame}>
-                  {enableAI ? '🏁 Start Race vs AI' : '🎮 Start Solo Game'}
+                  {currentUser
+                    ? (enableAI ? '🏁 Start Race vs AI' : '🎮 Start Solo Game')
+                    : '🔐 Login to Play'
+                  }
                 </button>
 
                 {/* Scoreboard - below the play button */}
-                <Scoreboard onNewScore={scoreboardRef} difficulty={difficulty} />
+                <Scoreboard
+                  onNewScore={scoreboardRef}
+                  difficulty={difficulty}
+                  authToken={authToken}
+                  currentUser={currentUser}
+                />
 
                 <div className="features">
                   <div className="feature">

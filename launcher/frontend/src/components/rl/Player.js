@@ -20,6 +20,7 @@ export class Player {
     this.score = 0
     this.isSprinting = false
     this.isDucking = false
+    this.jumpCount = 0  // Track total jumps for metrics
   }
 
   update(platforms, deltaTime = 1) {
@@ -154,6 +155,7 @@ export class Player {
     if (this.isOnGround && this.velocityY >= 0) {
       this.velocityY = -this.jumpPower
       this.isOnGround = false
+      this.jumpCount++  // Increment jump counter for metrics
     }
   }
 
@@ -185,6 +187,7 @@ export class Player {
     this.isOnGround = false
     this.distance = 0
     this.score = 0
+    this.jumpCount = 0  // Reset jump counter for new game
   }
 
   collectCoin(coin) {
