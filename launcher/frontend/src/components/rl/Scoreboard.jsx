@@ -272,10 +272,28 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
               <div>
                 <h3 style={{ margin: '0 0 10px 0', color: '#667eea', fontSize: '1.5rem' }}>
                   📊 {selectedPlayerStats.username}'s Stats
+                  {!selectedPlayerStats.registered && (
+                    <span style={{ fontSize: '0.75rem', color: '#ff9800', marginLeft: '10px', fontWeight: 'normal' }}>
+                      (Unregistered)
+                    </span>
+                  )}
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: '#999', marginBottom: '20px' }}>
-                  Account created: {new Date(selectedPlayerStats.created_at).toLocaleDateString()}
+                  {selectedPlayerStats.registered ? 'Account created' : 'First played'}: {new Date(selectedPlayerStats.created_at).toLocaleDateString()}
                 </p>
+                {selectedPlayerStats.note && (
+                  <div style={{
+                    background: '#fff3e0',
+                    border: '1px solid #ff9800',
+                    borderRadius: '6px',
+                    padding: '10px',
+                    marginBottom: '20px',
+                    fontSize: '0.85rem',
+                    color: '#e65100'
+                  }}>
+                    ℹ️ {selectedPlayerStats.note}
+                  </div>
+                )}
 
                 <div style={{
                   display: 'grid',
@@ -301,10 +319,13 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
                     padding: '15px',
                     background: 'linear-gradient(135deg, #fff4e6, #ffe8cc)',
                     borderRadius: '8px',
-                    border: '1px solid #ffa726'
+                    border: '1px solid #ffa726',
+                    opacity: !selectedPlayerStats.registered && selectedPlayerStats.stats.total_jumps === 0 ? 0.5 : 1
                   }}>
                     <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ffa726' }}>
-                      {selectedPlayerStats.stats.total_jumps}
+                      {!selectedPlayerStats.registered && selectedPlayerStats.stats.total_jumps === 0
+                        ? 'N/A'
+                        : selectedPlayerStats.stats.total_jumps}
                     </div>
                     <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Total Jumps</div>
                   </div>
@@ -340,10 +361,13 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
                     padding: '15px',
                     background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)',
                     borderRadius: '8px',
-                    border: '1px solid #ff9800'
+                    border: '1px solid #ff9800',
+                    opacity: !selectedPlayerStats.registered && selectedPlayerStats.stats.total_playtime === 0 ? 0.5 : 1
                   }}>
                     <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ff9800' }}>
-                      {Math.round(selectedPlayerStats.stats.total_playtime / 60)}min
+                      {!selectedPlayerStats.registered && selectedPlayerStats.stats.total_playtime === 0
+                        ? 'N/A'
+                        : `${Math.round(selectedPlayerStats.stats.total_playtime / 60)}min`}
                     </div>
                     <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Total Playtime</div>
                   </div>

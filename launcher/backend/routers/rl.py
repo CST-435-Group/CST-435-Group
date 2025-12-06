@@ -1414,3 +1414,68 @@ def get_user_stats(authorization: Optional[str] = Header(None)):
         },
         "created_at": user['created_at']
     }
+
+
+@router.get("/metrics/stats/{username}", summary="Get Any Player's Stats")
+def get_player_stats(username: str):
+    """
+    Get any player's public statistics by username
+    No authentication required - public endpoint
+
+    Returns registered user stats if account exists, otherwise aggregates stats from scores
+    """
+    from datetime import datetime
+
+    users = load_users()
+    scores = load_scores()
+
+    # Find user by username (case-insensitive)
+    user = next((u for u in users if u['username'].lower() == username.lower()), None)
+
+    if user:
+        # Registered user - return their tracked stats
+        return {
+            "status": "success",
+            "username": user['username'],
+            "user_id": user['user_id'],
+            "registered": True,
+            "stats": {
+                "total_games": user.get('total_games', 0),
+                "total_jumps": user.get('total_jumps', 0),
+                "total_points": user.get('total_points', 0),
+                "total_distance": user.get('total_distance', 0),
+                "total_playtime": user.get('total_playtime', 0.0)
+            },
+            "created_at": user['created_at']
+        }
+
+    # Not a registered user - check if they have scores
+    player_scores = [s for s in scores if s['name'].lower() == username.lower()]
+
+    if not player_scores:
+        raise HTTPException(status_code=404, detail=f"Player '{username}' not found")
+
+    # Aggregate stats from scores for non-registered player
+    total_scores = len(player_scores)
+    total_points = sum(s.get('score', 0) for s in player_scores)
+    total_distance = sum(s.get('distance', 0) for s in player_scores)
+
+    # Get earliest score timestamp
+    timestamps = [s.get('timestamp') or s.get('date', '') for s in player_scores]
+    first_played = min([t for t in timestamps if t]) if timestamps else datetime.utcnow().isoformat()
+
+    return {
+        "status": "success",
+        "username": username,
+        "user_id": None,
+        "registered": False,
+        "stats": {
+            "total_games": total_scores,
+            "total_jumps": 0,  # Not tracked for non-registered users
+            "total_points": total_points,
+            "total_distance": total_distance,
+            "total_playtime": 0.0  # Not tracked for non-registered users
+        },
+        "created_at": first_played,
+        "note": "This player is not registered. Stats are estimated from leaderboard scores."
+    }
