@@ -159,10 +159,10 @@ export const rlAPI = {
     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
   }),
   clearScores: (adminPassword) => api.delete('/rl/scores', {
-    params: adminPassword ? { admin_password: adminPassword } : {}
+    data: adminPassword ? { admin_password: adminPassword } : null
   }),
   deleteScore: (playerName, difficulty, adminPassword) => api.delete(`/rl/scores/${encodeURIComponent(playerName)}/${difficulty}`, {
-    params: adminPassword ? { admin_password: adminPassword } : {}
+    data: adminPassword ? { admin_password: adminPassword } : null
   }),
   // Authentication
   register: (username, password) => api.post('/rl/auth/register', { username, password }),

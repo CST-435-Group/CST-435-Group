@@ -88,6 +88,11 @@ class UserProfileUpdate(BaseModel):
     player_color: Optional[str] = None  # Hex color code
 
 
+class AdminAuth(BaseModel):
+    """Admin authentication for sensitive operations"""
+    admin_password: str
+
+
 class GameMetrics(BaseModel):
     """Game metrics for a single session"""
     jumps: int
@@ -1688,18 +1693,18 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
 
 
 @router.delete("/scores", summary="Clear All Scores (Admin Only)")
-def clear_scores(request: Request, admin_password: str = None):
+def clear_scores(request: Request, auth: AdminAuth = None):
     """
     Clear all scores from the leaderboard
     WARNING: This is irreversible!
-    Requires admin password for authorization
+    Requires admin password for authorization (sent in request body)
     """
     client_ip = get_client_ip(request)
 
     # Admin password check (you should change this to a secure password!)
     ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD", "admin123_CHANGE_ME")
 
-    if not admin_password or admin_password != ADMIN_PASSWORD:
+    if not auth or not auth.admin_password or auth.admin_password != ADMIN_PASSWORD:
         # Log unauthorized attempt
         log_activity("leaderboard_clear_denied", {
             "ip": client_ip,
@@ -1737,19 +1742,19 @@ def delete_score(
     difficulty: str,
     request: Request,
     authorization: Optional[str] = Header(None),
-    admin_password: str = None
+    auth: Optional[AdminAuth] = None
 ):
     """
     Delete a specific player's score from a specific difficulty
     Authorization required:
-    - Users can delete their own scores (if authenticated)
-    - Admin can delete any score with admin password
+    - Users can delete their own scores (if authenticated via JWT token)
+    - Admin can delete any score with admin password (sent in request body)
     """
     client_ip = get_client_ip(request)
 
     # Check admin password first (allows admin to delete any score)
     ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD", "admin123_CHANGE_ME")
-    is_admin = admin_password and admin_password == ADMIN_PASSWORD
+    is_admin = auth and auth.admin_password and auth.admin_password == ADMIN_PASSWORD
 
     # If not admin, check if user is authenticated and deleting their own score
     if not is_admin:
