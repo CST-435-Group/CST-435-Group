@@ -1395,6 +1395,11 @@ JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production-INSEC
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DAYS = 30
 
+# Game Completion Secret
+# Shared secret between frontend and backend to prevent manual API abuse
+# Frontend must provide this to request completion tokens
+GAME_COMPLETION_SECRET = os.getenv("GAME_COMPLETION_SECRET", "INSECURE-change-in-production")
+
 
 # ============================================================================
 # USER AUTHENTICATION FUNCTIONS
@@ -1574,15 +1579,38 @@ def mark_token_used(token: str):
         raise
 
 
+class GameCompleteRequest(BaseModel):
+    """Request to get completion token - requires secret to prevent manual API abuse"""
+    game_secret: str
+
+
 @router.post("/game-complete", summary="Generate Completion Token")
-def game_complete(request: Request, authorization: Optional[str] = Header(None)):
+def game_complete(
+    complete_request: GameCompleteRequest,
+    request: Request,
+    authorization: Optional[str] = Header(None)
+):
     """
     Generate a completion token when player reaches the goal.
     This token must be submitted with the score to prove the game was actually completed.
 
+    SECURITY: Requires game_secret to prevent manual API calls from getting tokens.
+    Only the frontend knows this secret.
+
     Returns:
         completion_token: JWT signed token proving goal was reached
     """
+    # Validate game secret (prevents manual API abuse)
+    if complete_request.game_secret != GAME_COMPLETION_SECRET:
+        log_activity("game_completion_denied", {
+            "ip": get_client_ip(request),
+            "reason": "invalid_game_secret"
+        })
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Invalid game secret"
+        )
+
     # Require authentication
     if not authorization:
         raise HTTPException(

@@ -155,7 +155,9 @@ export const rlAPI = {
   exportEpisodeCheckpointONNX: (episode) => api.post(`/rl/checkpoints/export-onnx/${episode}`),
   // Scoreboard
   getScores: (limit = 10, difficulty = 'easy') => api.get(`/rl/scores?limit=${limit}&difficulty=${difficulty}`),
-  requestCompletionToken: (token) => api.post('/rl/game-complete', {}, {
+  requestCompletionToken: (token) => api.post('/rl/game-complete', {
+    game_secret: import.meta.env.VITE_GAME_COMPLETION_SECRET || 'INSECURE-change-in-production'
+  }, {
     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
   }),
   submitScore: (scoreData, token) => api.post('/rl/scores', scoreData, {
