@@ -1384,8 +1384,10 @@ USERS_DB_PATH = DATA_DIR / "rl_users.json"
 METRICS_DB_PATH = DATA_DIR / "rl_metrics.json"
 TRAINING_DATA_DIR = DATA_DIR / "training_data"
 
-# JWT Secret (in production, use environment variable)
-JWT_SECRET = "your-secret-key-change-in-production"
+# JWT Configuration
+# CRITICAL: Set JWT_SECRET in .env file for production!
+# Generate a secure secret: python -c "import secrets; print(secrets.token_urlsafe(32))"
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production-INSECURE")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DAYS = 30
 
