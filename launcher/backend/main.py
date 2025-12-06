@@ -35,10 +35,16 @@ app.add_middleware(
 )
 
 # Import routers - support running from both root and backend directory
-try:
-    from routers import ann, cnn, nlp, rnn, docs, rl
-except ImportError:
-    from launcher.backend.routers import ann, cnn, nlp, rnn, docs, rl
+import sys
+from pathlib import Path
+
+# Add backend directory to Python path
+backend_dir = Path(__file__).parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+# Now import routers (will work from backend directory)
+from routers import ann, cnn, nlp, rnn, docs, rl
 
 # Lazy import GAN router from GAN project
 gan_router = None
