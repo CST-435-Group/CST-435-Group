@@ -1467,9 +1467,22 @@ def submit_score(score_entry: ScoreEntry, authorization: Optional[str] = Header(
     # Load existing scores
     scores = load_scores()
 
+    # If authenticated, MUST use registered username (prevent spoofing)
+    if user:
+        player_name = user['username']
+    else:
+        player_name = score_entry.name.strip() or "Anonymous"
+
+    # Validate score legitimacy (prevent fake/cheated scores)
+    if score_entry.time <= 0 or score_entry.distance < 0 or score_entry.score < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid score: time must be > 0, distance and score must be >= 0"
+        )
+
     # Create new score entry
     new_score = {
-        "name": score_entry.name.strip() or "Anonymous",
+        "name": player_name,
         "time": round(score_entry.time, 1),
         "score": score_entry.score,
         "distance": score_entry.distance,
