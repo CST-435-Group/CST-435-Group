@@ -174,6 +174,10 @@ export const rlAPI = {
     headers: { 'Authorization': `Bearer ${token}` }
   }),
   getPlayerStats: (username) => api.get(`/rl/metrics/stats/${encodeURIComponent(username)}`),
+  // Profile
+  updateProfile: (profileData, token) => api.put('/rl/auth/profile', profileData, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }),
 }
 
 // General API calls

@@ -38,6 +38,18 @@ function RLProject() {
   const [selectedDifficulty, setSelectedDifficulty] = useState('easy')
   const scoreboardRef = useRef(null)
 
+  // Profile settings modal state
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [profileFormData, setProfileFormData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+    newUsername: '',
+    playerColor: ''
+  })
+  const [profileError, setProfileError] = useState('')
+  const [profileSuccess, setProfileSuccess] = useState('')
+
   const TRAINING_PASSWORD = 'John117@home'
 
   // Check authentication on mount
@@ -197,6 +209,83 @@ function RLProject() {
     setAuthToken(null)
     setCurrentUser(null)
     setGameStarted(false)
+  }
+
+  const handleOpenProfile = () => {
+    setProfileFormData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+      newUsername: currentUser?.username || '',
+      playerColor: currentUser?.player_color || '#4287f5'
+    })
+    setProfileError('')
+    setProfileSuccess('')
+    setShowProfileModal(true)
+  }
+
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault()
+    setProfileError('')
+    setProfileSuccess('')
+
+    try {
+      const updateData = {}
+
+      // Only include fields that were changed
+      if (profileFormData.newPassword) {
+        if (!profileFormData.currentPassword) {
+          setProfileError('Current password required to change password')
+          return
+        }
+        if (profileFormData.newPassword !== profileFormData.confirmPassword) {
+          setProfileError('New passwords do not match')
+          return
+        }
+        updateData.current_password = profileFormData.currentPassword
+        updateData.new_password = profileFormData.newPassword
+      }
+
+      if (profileFormData.newUsername && profileFormData.newUsername !== currentUser.username) {
+        updateData.new_username = profileFormData.newUsername
+      }
+
+      if (profileFormData.playerColor && profileFormData.playerColor !== currentUser.player_color) {
+        updateData.player_color = profileFormData.playerColor
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        setProfileError('No changes to save')
+        return
+      }
+
+      const response = await rlAPI.updateProfile(updateData, authToken)
+
+      // Update current user with new data
+      setCurrentUser({
+        ...currentUser,
+        username: response.data.user.username,
+        player_color: response.data.user.player_color
+      })
+
+      setProfileSuccess(response.data.message)
+
+      // Clear password fields
+      setProfileFormData({
+        ...profileFormData,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      })
+
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        setShowProfileModal(false)
+      }, 2000)
+    } catch (error) {
+      console.error('Profile update error:', error)
+      setProfileError(error.response?.data?.detail || 'Failed to update profile. Please try again.')
+    }
   }
 
   const handleGameComplete = async (gameData) => {
@@ -463,6 +552,145 @@ function RLProject() {
         </div>
       )}
 
+      {/* Profile Settings Modal */}
+      {showProfileModal && (
+        <div className="password-modal-overlay" onClick={() => setShowProfileModal(false)}>
+          <div className="password-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <h3>⚙️ Profile Settings</h3>
+            <p style={{ marginBottom: '20px', color: '#666' }}>
+              Update your username, password, or player color
+            </p>
+            <form onSubmit={handleProfileSubmit}>
+              {/* Username Change */}
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={profileFormData.newUsername}
+                  onChange={(e) => setProfileFormData({ ...profileFormData, newUsername: e.target.value })}
+                  placeholder="Enter new username"
+                  className="password-input"
+                  minLength={3}
+                  maxLength={20}
+                />
+                <p style={{ fontSize: '0.85rem', color: '#999', margin: '3px 0 0 0' }}>
+                  This will update your name on the leaderboard
+                </p>
+              </div>
+
+              {/* Player Color */}
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
+                  Player Color
+                </label>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="color"
+                    value={profileFormData.playerColor}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, playerColor: e.target.value })}
+                    style={{
+                      width: '60px',
+                      height: '40px',
+                      border: '2px solid #ddd',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    backgroundColor: profileFormData.playerColor,
+                    border: '2px solid #333',
+                    borderRadius: '4px'
+                  }}></div>
+                  <span style={{ color: '#666', fontSize: '0.9rem' }}>{profileFormData.playerColor}</span>
+                </div>
+                <p style={{ fontSize: '0.85rem', color: '#999', margin: '3px 0 0 0' }}>
+                  Your player square will be this color in-game
+                </p>
+              </div>
+
+              {/* Password Change Section */}
+              <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #eee' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#333' }}>Change Password (Optional)</h4>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={profileFormData.currentPassword}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, currentPassword: e.target.value })}
+                    placeholder="Enter current password"
+                    className="password-input"
+                  />
+                </div>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={profileFormData.newPassword}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, newPassword: e.target.value })}
+                    placeholder="Enter new password (min 6 chars)"
+                    className="password-input"
+                    minLength={6}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={profileFormData.confirmPassword}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, confirmPassword: e.target.value })}
+                    placeholder="Confirm new password"
+                    className="password-input"
+                    minLength={6}
+                  />
+                </div>
+              </div>
+
+              {profileError && (
+                <div className="password-error" style={{ marginTop: '15px' }}>
+                  {profileError}
+                </div>
+              )}
+
+              {profileSuccess && (
+                <div style={{
+                  marginTop: '15px',
+                  padding: '10px',
+                  background: '#e8f5e9',
+                  border: '1px solid #4caf50',
+                  borderRadius: '6px',
+                  color: '#2e7d32',
+                  fontWeight: 'bold'
+                }}>
+                  ✓ {profileSuccess}
+                </div>
+              )}
+
+              <div className="password-actions" style={{ marginTop: '20px' }}>
+                <button type="submit" className="password-submit-btn">
+                  Save Changes
+                </button>
+                <button type="button" onClick={() => setShowProfileModal(false)} className="password-cancel-btn">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="rl-content">
         {/* Game Tab */}
@@ -675,7 +903,21 @@ function RLProject() {
                   }}>
                     <div>
                       <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>Logged in as</p>
-                      <p style={{ margin: '3px 0 0 0', fontSize: '1.2rem', fontWeight: 'bold', color: '#667eea' }}>
+                      <p
+                        onClick={handleOpenProfile}
+                        style={{
+                          margin: '3px 0 0 0',
+                          fontSize: '1.2rem',
+                          fontWeight: 'bold',
+                          color: '#667eea',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          transition: 'color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.color = '#4a5fcc'}
+                        onMouseLeave={(e) => e.target.style.color = '#667eea'}
+                        title="Click to edit profile"
+                      >
                         {currentUser.username}
                       </p>
                     </div>
@@ -755,6 +997,7 @@ function RLProject() {
                   playingEpisode={playingEpisode}
                   onGameComplete={handleGameComplete}
                   difficulty={difficulty}
+                  playerColor={currentUser?.player_color}
                 />
               </div>
             )}

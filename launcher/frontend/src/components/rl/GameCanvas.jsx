@@ -17,7 +17,7 @@ const DISTANCE_SCALE = 5
  * @param {function} onGameComplete - Callback when game completes with time and stats
  * @param {string} difficulty - Game difficulty (easy, medium, hard)
  */
-export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPath = null, playingEpisode = null, onGameComplete, difficulty = 'easy' }) {
+export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPath = null, playingEpisode = null, onGameComplete, difficulty = 'easy', playerColor = '#4CAF50' }) {
   const canvasRef = useRef(null)
   const navigate = useNavigate()
   const [gameState, setGameState] = useState('playing') // playing, won, lost
@@ -488,7 +488,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     ctx.fillText('🏁', map.goal.x + 5, map.goal.y - 10)
 
     // Draw player (human)
-    ctx.fillStyle = '#4CAF50' // Green for human
+    ctx.fillStyle = playerColor || '#4CAF50' // Use custom color or default green
     ctx.fillRect(player.x, player.y, player.width, player.height)
     ctx.strokeStyle = '#000'
     ctx.lineWidth = 2

@@ -80,6 +80,14 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserProfileUpdate(BaseModel):
+    """User profile update request"""
+    current_password: Optional[str] = None  # Required for password change
+    new_password: Optional[str] = None
+    new_username: Optional[str] = None
+    player_color: Optional[str] = None  # Hex color code
+
+
 class GameMetrics(BaseModel):
     """Game metrics for a single session"""
     jumps: int
@@ -170,6 +178,7 @@ def register_user(user_data: UserRegister):
         "username": user_data.username,
         "password_hash": hash_password(user_data.password),
         "created_at": datetime.utcnow().isoformat(),
+        "player_color": "#4287f5",  # Default blue color
         "total_games": 0,
         "total_jumps": 0,
         "total_points": 0,
@@ -190,7 +199,8 @@ def register_user(user_data: UserRegister):
         "user": {
             "user_id": user_id,
             "username": user_data.username,
-            "created_at": new_user["created_at"]
+            "created_at": new_user["created_at"],
+            "player_color": new_user["player_color"]
         }
     }
 
@@ -223,7 +233,8 @@ def login_user(user_data: UserLogin):
         "user": {
             "user_id": user['user_id'],
             "username": user['username'],
-            "created_at": user['created_at']
+            "created_at": user['created_at'],
+            "player_color": user.get('player_color', '#4287f5')
         }
     }
 
@@ -241,6 +252,7 @@ def verify_token(authorization: Optional[str] = Header(None)):
             "user_id": user['user_id'],
             "username": user['username'],
             "created_at": user['created_at'],
+            "player_color": user.get('player_color', '#4287f5'),
             "stats": {
                 "total_games": user.get('total_games', 0),
                 "total_jumps": user.get('total_jumps', 0),
@@ -248,6 +260,83 @@ def verify_token(authorization: Optional[str] = Header(None)):
                 "total_distance": user.get('total_distance', 0),
                 "total_playtime": user.get('total_playtime', 0.0)
             }
+        }
+    }
+
+
+@router.put("/auth/profile", summary="Update User Profile")
+def update_profile(profile_data: UserProfileUpdate, authorization: Optional[str] = Header(None)):
+    """
+    Update user profile (username, password, player color)
+    Requires authentication
+    """
+    user = get_current_user(authorization)
+    users = load_users()
+    scores = load_scores()
+
+    # Find user in list
+    user_index = next((i for i, u in enumerate(users) if u['user_id'] == user['user_id']), None)
+    if user_index is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    updated_fields = []
+
+    # Update password (requires current password verification)
+    if profile_data.new_password:
+        if not profile_data.current_password:
+            raise HTTPException(status_code=400, detail="Current password required to change password")
+
+        if not verify_password(profile_data.current_password, user['password_hash']):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+        if len(profile_data.new_password) < 6:
+            raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+
+        users[user_index]['password_hash'] = hash_password(profile_data.new_password)
+        updated_fields.append("password")
+
+    # Update username (updates all associated scores)
+    if profile_data.new_username:
+        # Validate new username
+        if len(profile_data.new_username) < 3 or len(profile_data.new_username) > 20:
+            raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
+
+        # Check if username already taken by another user
+        if any(u['username'].lower() == profile_data.new_username.lower() and u['user_id'] != user['user_id'] for u in users):
+            raise HTTPException(status_code=400, detail="Username already taken")
+
+        old_username = users[user_index]['username']
+        users[user_index]['username'] = profile_data.new_username
+
+        # Update username in all scores
+        for score in scores:
+            if score.get('user_id') == user['user_id']:
+                score['name'] = profile_data.new_username
+
+        save_scores(scores)
+        updated_fields.append(f"username (from '{old_username}' to '{profile_data.new_username}')")
+
+    # Update player color
+    if profile_data.player_color:
+        # Validate hex color format
+        import re
+        if not re.match(r'^#[0-9A-Fa-f]{6}$', profile_data.player_color):
+            raise HTTPException(status_code=400, detail="Invalid color format. Use hex format like #4287f5")
+
+        users[user_index]['player_color'] = profile_data.player_color
+        updated_fields.append("player color")
+
+    # Save updated users
+    save_users(users)
+
+    return {
+        "status": "success",
+        "message": f"Profile updated: {', '.join(updated_fields)}",
+        "user": {
+            "user_id": users[user_index]['user_id'],
+            "username": users[user_index]['username'],
+            "player_color": users[user_index].get('player_color', '#4287f5'),
+            "created_at": users[user_index]['created_at']
         }
     }
 
