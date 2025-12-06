@@ -117,6 +117,11 @@ function TrainingDashboard({ status }) {
               <div className={`card-value ${isTraining ? 'training' : 'idle'}`}>
                 {isTraining ? '🟢 Training' : '⚪ Idle'}
               </div>
+              {trainingStatus.training_mode && (
+                <div className="card-detail">
+                  {trainingStatus.training_mode === 'behavioral_cloning' ? 'Behavioral Cloning' : 'Reinforcement Learning'}
+                </div>
+              )}
             </div>
 
             <div className="status-card">
@@ -126,37 +131,85 @@ function TrainingDashboard({ status }) {
                   ? `${(trainingStatus.progress * 100).toFixed(1)}%`
                   : '0%'}
               </div>
-              {trainingStatus.current_step !== undefined && (
-                <div className="card-detail">
-                  {trainingStatus.current_step.toLocaleString()} / {trainingStatus.total_steps?.toLocaleString() || 0} steps
-                </div>
+              {trainingStatus.training_mode === 'behavioral_cloning' ? (
+                trainingStatus.current_epoch !== undefined && (
+                  <div className="card-detail">
+                    Epoch {trainingStatus.current_epoch} / {trainingStatus.total_epochs || 0}
+                  </div>
+                )
+              ) : (
+                trainingStatus.current_step !== undefined && (
+                  <div className="card-detail">
+                    {trainingStatus.current_step.toLocaleString()} / {trainingStatus.total_steps?.toLocaleString() || 0} steps
+                  </div>
+                )
               )}
             </div>
 
-            <div className="status-card">
-              <div className="card-label">Episodes</div>
-              <div className="card-value">
-                {trainingStatus.episodes?.toLocaleString() || 0}
-              </div>
-            </div>
+            {trainingStatus.training_mode === 'behavioral_cloning' ? (
+              // Behavioral Cloning metrics
+              <>
+                <div className="status-card">
+                  <div className="card-label">Train Loss</div>
+                  <div className="card-value">
+                    {trainingStatus.train_loss !== undefined
+                      ? trainingStatus.train_loss.toFixed(4)
+                      : '0.0000'}
+                  </div>
+                </div>
 
-            <div className="status-card">
-              <div className="card-label">Avg Reward</div>
-              <div className="card-value">
-                {trainingStatus.avg_reward !== undefined
-                  ? trainingStatus.avg_reward.toFixed(2)
-                  : '0.00'}
-              </div>
-            </div>
+                <div className="status-card">
+                  <div className="card-label">Val Loss</div>
+                  <div className="card-value">
+                    {trainingStatus.val_loss !== undefined
+                      ? trainingStatus.val_loss.toFixed(4)
+                      : '0.0000'}
+                  </div>
+                  {trainingStatus.best_val_loss !== undefined && (
+                    <div className="card-detail">
+                      Best: {trainingStatus.best_val_loss.toFixed(4)}
+                    </div>
+                  )}
+                </div>
 
-            <div className="status-card">
-              <div className="card-label">Best Reward</div>
-              <div className="card-value">
-                {trainingStatus.best_reward !== undefined
-                  ? trainingStatus.best_reward.toFixed(2)
-                  : '0.00'}
-              </div>
-            </div>
+                <div className="status-card">
+                  <div className="card-label">Accuracy</div>
+                  <div className="card-value">
+                    {trainingStatus.val_accuracy !== undefined
+                      ? `${(trainingStatus.val_accuracy * 100).toFixed(1)}%`
+                      : '0%'}
+                  </div>
+                </div>
+              </>
+            ) : (
+              // Reinforcement Learning metrics
+              <>
+                <div className="status-card">
+                  <div className="card-label">Episodes</div>
+                  <div className="card-value">
+                    {trainingStatus.episodes?.toLocaleString() || 0}
+                  </div>
+                </div>
+
+                <div className="status-card">
+                  <div className="card-label">Avg Reward</div>
+                  <div className="card-value">
+                    {trainingStatus.avg_reward !== undefined
+                      ? trainingStatus.avg_reward.toFixed(2)
+                      : '0.00'}
+                  </div>
+                </div>
+
+                <div className="status-card">
+                  <div className="card-label">Best Reward</div>
+                  <div className="card-value">
+                    {trainingStatus.best_reward !== undefined
+                      ? trainingStatus.best_reward.toFixed(2)
+                      : '0.00'}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Progress Bar */}

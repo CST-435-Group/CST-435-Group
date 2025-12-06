@@ -463,10 +463,24 @@ def get_training_status():
 
 
 @router.post("/training/start", summary="Start Training")
-def start_training(timesteps: int = 1000000):
+def start_training(
+    training_mode: str = "reinforcement_learning",
+    timesteps: int = 1000000,
+    epochs: int = 100,
+    batch_size: int = 256,
+    learning_rate: float = 0.001,
+    val_split: float = 0.2
+):
     """
-    Start RL agent training
-    This launches the training script as a background process
+    Start agent training
+
+    Args:
+        training_mode: "reinforcement_learning" (PPO self-play) or "behavioral_cloning" (learn from human data)
+        timesteps: Number of timesteps for RL training
+        epochs: Number of epochs for BC training
+        batch_size: Batch size for BC training
+        learning_rate: Learning rate for BC training
+        val_split: Validation split ratio for BC training
     """
     global training_process, training_pid
 
@@ -477,9 +491,45 @@ def start_training(timesteps: int = 1000000):
     if not RL_BACKEND_PATH:
         raise HTTPException(status_code=500, detail="RL backend path not found")
 
-    train_script = RL_BACKEND_PATH / "training" / "train_agent.py"
-    if not train_script.exists():
-        raise HTTPException(status_code=500, detail="Training script not found")
+    # Select training script based on mode
+    if training_mode == "behavioral_cloning":
+        train_script = RL_BACKEND_PATH / "training" / "train_behavioral_cloning.py"
+        if not train_script.exists():
+            raise HTTPException(status_code=500, detail="Behavioral cloning training script not found")
+
+        # Check if training data exists
+        training_data_dir = Path(__file__).parent.parent / "data" / "training_data"
+        if not training_data_dir.exists() or not any(training_data_dir.rglob("*.json")):
+            raise HTTPException(
+                status_code=400,
+                detail="No training data found. Play the game in solo mode to collect training data first."
+            )
+
+        # Build command for behavioral cloning
+        cmd_args = [
+            sys.executable, str(train_script),
+            "--epochs", str(epochs),
+            "--batch-size", str(batch_size),
+            "--learning-rate", str(learning_rate),
+            "--val-split", str(val_split)
+        ]
+
+        message = f"Behavioral cloning training started with {epochs} epochs"
+        estimated_time = epochs / 10  # Rough estimate: ~6 minutes per 10 epochs
+
+    else:  # reinforcement_learning
+        train_script = RL_BACKEND_PATH / "training" / "train_agent.py"
+        if not train_script.exists():
+            raise HTTPException(status_code=500, detail="RL training script not found")
+
+        # Build command for RL
+        cmd_args = [
+            sys.executable, str(train_script),
+            "--timesteps", str(timesteps)
+        ]
+
+        message = f"RL training started with {timesteps} timesteps"
+        estimated_time = timesteps / 50000  # Rough estimate for RL
 
     try:
         # Clear old status file
@@ -487,13 +537,10 @@ def start_training(timesteps: int = 1000000):
         if status_file.exists():
             status_file.unlink()
 
-        # Launch training in background
-        python_cmd = sys.executable
-
         # Start process in background
         # Use DEVNULL instead of PIPE to avoid Windows asyncio connection errors
         training_process = subprocess.Popen(
-            [python_cmd, str(train_script), "--timesteps", str(timesteps)],
+            cmd_args,
             cwd=str(RL_BACKEND_PATH / "training"),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -505,8 +552,9 @@ def start_training(timesteps: int = 1000000):
         return {
             "status": "started",
             "pid": training_pid,
-            "message": f"Training started with {timesteps} timesteps",
-            "estimated_time_hours": timesteps / 50000,  # Rough estimate
+            "training_mode": training_mode,
+            "message": message,
+            "estimated_time_hours": estimated_time,
             "note": "Training is running in the background. Check /training/status or /training/stream for progress."
         }
     except Exception as e:
