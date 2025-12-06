@@ -672,6 +672,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
   const extractStateFeatures = (game) => {
     const { player, map } = game
     const platforms = map.platforms
+    const enemies = map.enemies || []
 
     // Find nearest platform below (for landing prediction)
     let nearestBelow = null
@@ -699,6 +700,20 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       }
     }
 
+    // Find nearest enemy ahead (for avoidance)
+    let nearestEnemy = null
+    let minDistEnemy = Infinity
+    for (const enemy of enemies) {
+      // Only consider enemies ahead of player and within reasonable range
+      if (enemy.x > player.x - 100 && enemy.x < player.x + 800) {
+        const dist = Math.abs(enemy.x - player.x) + Math.abs(enemy.y - player.y)
+        if (dist < minDistEnemy) {
+          minDistEnemy = dist
+          nearestEnemy = enemy
+        }
+      }
+    }
+
     return {
       player_x: player.x,
       player_y: player.y,
@@ -709,6 +724,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       platform_below_y: nearestBelow ? nearestBelow.y - player.y : null,
       platform_ahead_x: nearestAhead ? nearestAhead.x - player.x : null,
       platform_ahead_y: nearestAhead ? nearestAhead.y - player.y : null,
+      enemy_x: nearestEnemy ? nearestEnemy.x - player.x : null,
+      enemy_y: nearestEnemy ? nearestEnemy.y - player.y : null,
       goal_x: map.goal.x - player.x,
       goal_y: map.goal.y - player.y
     }

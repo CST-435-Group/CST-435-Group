@@ -78,7 +78,7 @@ class HumanGameplayDataset(Dataset):
         self.actions = []
 
         for point in data_points:
-            # State features (12 total)
+            # State features (14 total)
             state = [
                 point['player_x'],
                 point['player_y'],
@@ -89,6 +89,8 @@ class HumanGameplayDataset(Dataset):
                 point['platform_below_y'] if point['platform_below_y'] is not None else 0.0,
                 point['platform_ahead_x'] if point['platform_ahead_x'] is not None else 0.0,
                 point['platform_ahead_y'] if point['platform_ahead_y'] is not None else 0.0,
+                point.get('enemy_x', 0.0) if point.get('enemy_x') is not None else 0.0,
+                point.get('enemy_y', 0.0) if point.get('enemy_y') is not None else 0.0,
                 point['goal_x'],
                 point['goal_y'],
                 # Encode difficulty as number: easy=0, medium=1, hard=2
@@ -265,7 +267,7 @@ def train_behavioral_cloning(
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     # Create model
-    input_size = 12  # State features
+    input_size = 14  # State features (added enemy_x and enemy_y)
     num_actions = 4  # left, right, jump, sprint
     model = PolicyNetwork(input_size, hidden_sizes, num_actions).to(device)
 
@@ -456,7 +458,8 @@ if __name__ == "__main__":
         print("\n[NEXT STEPS]:")
         print("  1. Model is saved in PyTorch format (.pth)")
         print("  2. To use in the game, you'll need to create an inference wrapper")
-        print("  3. The model takes 12 numerical features and outputs 4 action probabilities")
+        print("  3. The model takes 14 numerical features and outputs 4 action probabilities")
+        print("     Features: player state (5) + platforms (4) + enemy (2) + goal (2) + difficulty (1)")
         print()
 
     except Exception as e:

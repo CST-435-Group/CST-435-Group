@@ -111,6 +111,10 @@ class TrainingDataPoint(BaseModel):
     platform_ahead_x: Optional[float] = None  # Relative X to nearest platform ahead
     platform_ahead_y: Optional[float] = None  # Relative Y to nearest platform ahead
 
+    # Nearest enemy (relative position)
+    enemy_x: Optional[float] = None  # Relative X to nearest enemy
+    enemy_y: Optional[float] = None  # Relative Y to nearest enemy
+
     # Goal position (relative)
     goal_x: float
     goal_y: float
