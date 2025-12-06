@@ -80,12 +80,15 @@ export class MapGenerator {
 
       // Only add platform if no overlap found
       if (!platformOverlaps) {
+        // 10% chance for ice platform (slippery)
+        const platformType = Math.random() < 0.1 ? 'ice' : 'platform'
+
         const newPlatform = {
           x: currentX,
           y: currentY,
           width: platformWidth,
           height: platformHeight,
-          type: 'platform'
+          type: platformType
         }
         platforms.push(newPlatform)
 

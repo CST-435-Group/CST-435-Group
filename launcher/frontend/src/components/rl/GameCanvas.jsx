@@ -525,7 +525,14 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
 
     // Draw platforms
     map.platforms.forEach(platform => {
-      ctx.fillStyle = platform.type === 'ground' ? '#8B4513' : '#2E8B57'
+      // Color based on platform type
+      if (platform.type === 'ground') {
+        ctx.fillStyle = '#8B4513'  // Brown for ground
+      } else if (platform.type === 'ice') {
+        ctx.fillStyle = '#4DA6FF'  // Light blue for ice (slippery)
+      } else {
+        ctx.fillStyle = '#2E8B57'  // Green for normal platforms
+      }
       ctx.fillRect(platform.x, platform.y, platform.width, platform.height)
 
       // Platform outline
@@ -735,8 +742,10 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       player_on_ground: player.isOnGround,
       platform_below_x: nearestBelow ? nearestBelow.x - player.x : null,
       platform_below_y: nearestBelow ? nearestBelow.y - player.y : null,
+      platform_below_is_ice: nearestBelow ? nearestBelow.type === 'ice' : false,
       platform_ahead_x: nearestAhead ? nearestAhead.x - player.x : null,
       platform_ahead_y: nearestAhead ? nearestAhead.y - player.y : null,
+      platform_ahead_is_ice: nearestAhead ? nearestAhead.type === 'ice' : false,
       enemy_x: nearestEnemy ? nearestEnemy.x - player.x : null,
       enemy_y: nearestEnemy ? nearestEnemy.y - player.y : null,
       goal_x: map.goal.x - player.x,

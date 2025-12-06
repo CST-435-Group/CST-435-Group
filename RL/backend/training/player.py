@@ -29,6 +29,7 @@ class Player:
         self.score = 0
         self.isSprinting = False
         self.isDucking = False
+        self.onIcePlatform = False  # Track if on ice (slippery)
 
     def update(self, platforms, deltaTime=1):
         """
@@ -52,12 +53,25 @@ class Player:
 
         # Check ground collision
         self.isOnGround = False
+        self.onIcePlatform = False
         for platform in platforms:
             if self.checkPlatformCollision(platform):
                 self.isOnGround = True
                 self.velocityY = 0
                 self.y = platform['y'] - self.height
+                # Check if platform is ice (slippery)
+                if platform.get('type') == 'ice':
+                    self.onIcePlatform = True
                 break
+
+        # Apply friction (reduced on ice)
+        if self.isOnGround:
+            if self.onIcePlatform:
+                # Ice: very low friction (0.95 = keeps 95% of velocity)
+                self.velocityX *= 0.95
+            else:
+                # Normal: high friction (0.7 = keeps 70% of velocity)
+                self.velocityX *= 0.7
 
         # Track distance
         self.distance = max(self.distance, self.x)

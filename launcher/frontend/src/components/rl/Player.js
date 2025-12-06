@@ -21,6 +21,7 @@ export class Player {
     this.isSprinting = false
     this.isDucking = false
     this.jumpCount = 0  // Track total jumps for metrics
+    this.onIcePlatform = false  // Track if on ice (slippery)
   }
 
   update(platforms, deltaTime = 1) {
@@ -56,6 +57,7 @@ export class Player {
 
     // Check vertical collisions - platforms are SOLID
     this.isOnGround = false
+    this.onIcePlatform = false
     for (const platform of platforms) {
       if (this.isOverlapping(platform)) {
         // Resolve collision by pushing player out
@@ -63,12 +65,27 @@ export class Player {
           // Moving down, hit top of platform (landing)
           this.y = platform.y - this.height
           this.isOnGround = true
+          // Check if platform is ice (slippery)
+          if (platform.type === 'ice') {
+            this.onIcePlatform = true
+          }
         } else if (this.velocityY < 0) {
           // Moving up, hit bottom of platform
           this.y = platform.y + platform.height
         }
         this.velocityY = 0
         break
+      }
+    }
+
+    // Apply friction (reduced on ice)
+    if (this.isOnGround) {
+      if (this.onIcePlatform) {
+        // Ice: very low friction (0.95 = keeps 95% of velocity)
+        this.velocityX *= 0.95
+      } else {
+        // Normal: high friction (0.7 = keeps 70% of velocity)
+        this.velocityX *= 0.7
       }
     }
 

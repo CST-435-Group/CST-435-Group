@@ -113,8 +113,10 @@ class TrainingDataPoint(BaseModel):
     # Nearest platforms (relative positions)
     platform_below_x: Optional[float] = None  # Relative X to nearest platform below
     platform_below_y: Optional[float] = None  # Relative Y to nearest platform below
+    platform_below_is_ice: bool = False  # Is platform below ice (slippery)?
     platform_ahead_x: Optional[float] = None  # Relative X to nearest platform ahead
     platform_ahead_y: Optional[float] = None  # Relative Y to nearest platform ahead
+    platform_ahead_is_ice: bool = False  # Is platform ahead ice (slippery)?
 
     # Nearest enemy (relative position)
     enemy_x: Optional[float] = None  # Relative X to nearest enemy

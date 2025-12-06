@@ -78,7 +78,7 @@ class HumanGameplayDataset(Dataset):
         self.actions = []
 
         for point in data_points:
-            # State features (14 total)
+            # State features (16 total - added ice platform flags)
             state = [
                 point['player_x'],
                 point['player_y'],
@@ -87,8 +87,10 @@ class HumanGameplayDataset(Dataset):
                 float(point['player_on_ground']),
                 point['platform_below_x'] if point['platform_below_x'] is not None else 0.0,
                 point['platform_below_y'] if point['platform_below_y'] is not None else 0.0,
+                float(point.get('platform_below_is_ice', False)),  # NEW: ice flag
                 point['platform_ahead_x'] if point['platform_ahead_x'] is not None else 0.0,
                 point['platform_ahead_y'] if point['platform_ahead_y'] is not None else 0.0,
+                float(point.get('platform_ahead_is_ice', False)),  # NEW: ice flag
                 point.get('enemy_x', 0.0) if point.get('enemy_x') is not None else 0.0,
                 point.get('enemy_y', 0.0) if point.get('enemy_y') is not None else 0.0,
                 point['goal_x'],
@@ -267,7 +269,7 @@ def train_behavioral_cloning(
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     # Create model
-    input_size = 14  # State features (added enemy_x and enemy_y)
+    input_size = 16  # State features (added enemy positions + ice platform flags)
     num_actions = 4  # left, right, jump, sprint
     model = PolicyNetwork(input_size, hidden_sizes, num_actions).to(device)
 

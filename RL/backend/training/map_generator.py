@@ -112,12 +112,15 @@ class MapGenerator:
 
             # Only add platform if no overlap found
             if not platform_overlaps:
+                # 10% chance for ice platform (slippery)
+                platform_type = 'ice' if random.random() < 0.1 else 'platform'
+
                 new_platform = {
                     'x': current_x,
                     'y': current_y,
                     'width': platform_width,
                     'height': platform_height,
-                    'type': 'platform'
+                    'type': platform_type
                 }
                 platforms.append(new_platform)
 
