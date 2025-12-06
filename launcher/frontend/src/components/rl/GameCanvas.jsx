@@ -6,7 +6,7 @@ import AIPlayer from './AIPlayer'
 import './GameCanvas.css'
 
 // Scale factor for displaying distance (distance is calculated in pixels, so we scale it down)
-const DISTANCE_SCALE = 5
+const DISTANCE_SCALE = 20
 
 /**
  * Main game canvas component

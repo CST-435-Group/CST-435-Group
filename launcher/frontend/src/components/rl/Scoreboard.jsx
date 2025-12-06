@@ -3,7 +3,7 @@ import { rlAPI } from '../../services/api'
 import './Scoreboard.css'
 
 // Scale factor for displaying distance (distance is calculated in pixels, so we scale it down)
-const DISTANCE_SCALE = 5
+const DISTANCE_SCALE = 20
 
 /**
  * Scoreboard component for displaying and managing player scores
