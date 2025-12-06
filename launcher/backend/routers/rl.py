@@ -1676,29 +1676,101 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
         }
 
 
-@router.delete("/scores", summary="Clear All Scores")
-def clear_scores():
+@router.delete("/scores", summary="Clear All Scores (Admin Only)")
+def clear_scores(request: Request, admin_password: str = None):
     """
     Clear all scores from the leaderboard
     WARNING: This is irreversible!
+    Requires admin password for authorization
     """
+    client_ip = get_client_ip(request)
+
+    # Admin password check (you should change this to a secure password!)
+    ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD", "admin123_CHANGE_ME")
+
+    if not admin_password or admin_password != ADMIN_PASSWORD:
+        # Log unauthorized attempt
+        log_activity("leaderboard_clear_denied", {
+            "ip": client_ip,
+            "reason": "invalid_admin_password"
+        })
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized: Admin password required to clear leaderboard"
+        )
+
     try:
+        # Count scores before clearing
+        scores_count = len(load_scores()) if SCORES_DB_PATH.exists() else 0
+
         if SCORES_DB_PATH.exists():
             SCORES_DB_PATH.unlink()
+
+        # Log successful clear
+        log_activity("leaderboard_cleared", {
+            "ip": client_ip,
+            "scores_deleted": scores_count
+        })
+
         return {
             "status": "success",
-            "message": "All scores have been cleared"
+            "message": f"All {scores_count} scores have been cleared"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear scores: {str(e)}")
 
 
 @router.delete("/scores/{player_name}/{difficulty}", summary="Delete Individual Score")
-def delete_score(player_name: str, difficulty: str):
+def delete_score(
+    player_name: str,
+    difficulty: str,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    admin_password: str = None
+):
     """
     Delete a specific player's score from a specific difficulty
-    Used to remove leaderboard abuse entries
+    Authorization required:
+    - Users can delete their own scores (if authenticated)
+    - Admin can delete any score with admin password
     """
+    client_ip = get_client_ip(request)
+
+    # Check admin password first (allows admin to delete any score)
+    ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD", "admin123_CHANGE_ME")
+    is_admin = admin_password and admin_password == ADMIN_PASSWORD
+
+    # If not admin, check if user is authenticated and deleting their own score
+    if not is_admin:
+        try:
+            if not authorization:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Unauthorized: Must be logged in to delete your own score, or use admin password"
+                )
+
+            user = get_current_user(authorization)
+
+            # Check if user is trying to delete their own score
+            if user['username'].lower() != player_name.lower():
+                log_activity("score_delete_denied", {
+                    "ip": client_ip,
+                    "username": user['username'],
+                    "attempted_delete": player_name,
+                    "reason": "not_own_score"
+                })
+                raise HTTPException(
+                    status_code=403,
+                    detail="Forbidden: Can only delete your own scores, or use admin password"
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=401,
+                detail="Unauthorized: Invalid token or admin password required"
+            )
+
     try:
         scores = load_scores()
 
@@ -1713,6 +1785,14 @@ def delete_score(player_name: str, difficulty: str):
             raise HTTPException(status_code=404, detail=f"Score not found for {player_name} on {difficulty}")
 
         save_scores(scores)
+
+        # Log successful deletion
+        log_activity("score_deleted", {
+            "ip": client_ip,
+            "deleted_player": player_name,
+            "difficulty": difficulty,
+            "by_admin": is_admin
+        })
 
         return {
             "status": "success",
