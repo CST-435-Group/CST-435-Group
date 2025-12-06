@@ -1556,24 +1556,35 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
     # Get client IP for logging
     client_ip = get_client_ip(request)
 
-    # Get user if authenticated
-    user = None
-    user_id = None
+    # Require authentication - only registered users can submit scores
+    if not authorization:
+        log_activity("score_submission_denied", {
+            "ip": client_ip,
+            "reason": "not_authenticated",
+            "attempted_name": score_entry.name
+        })
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: You must be logged in to submit scores"
+        )
+
     try:
-        if authorization:
-            user = get_current_user(authorization)
-            user_id = user['user_id']
-    except:
-        pass  # Allow unauthenticated submissions
+        user = get_current_user(authorization)
+        user_id = user['user_id']
+        player_name = user['username']  # Always use registered username
+    except Exception as e:
+        log_activity("score_submission_denied", {
+            "ip": client_ip,
+            "reason": "invalid_token",
+            "attempted_name": score_entry.name
+        })
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Invalid or expired token"
+        )
 
     # Load existing scores
     scores = load_scores()
-
-    # If authenticated, MUST use registered username (prevent spoofing)
-    if user:
-        player_name = user['username']
-    else:
-        player_name = score_entry.name.strip() or "Anonymous"
 
     # Validate score legitimacy (prevent fake/cheated scores)
     if score_entry.time <= 0 or score_entry.distance < 0 or score_entry.score < 0:
