@@ -307,16 +307,29 @@ function RLProject() {
     }
 
     // Save score if player won
-    if (gameData.won && scoreboardRef.current && currentUser) {
-      scoreboardRef.current(
-        currentUser.username,
-        gameData.time,
-        gameData.score,
-        gameData.distance,
-        gameData.won,
-        difficulty,
-        authToken
-      )
+    if (gameData.won && scoreboardRef.current && currentUser && authToken) {
+      try {
+        // Request completion token from backend (proof that player reached goal)
+        console.log('[RLProject] Requesting completion token...')
+        const tokenResponse = await rlAPI.requestCompletionToken(authToken)
+        const completionToken = tokenResponse.data.completion_token
+        console.log('[RLProject] Got completion token, submitting score...')
+
+        // Submit score with completion token
+        scoreboardRef.current(
+          currentUser.username,
+          gameData.time,
+          gameData.score,
+          gameData.distance,
+          gameData.won,
+          difficulty,
+          authToken,
+          completionToken  // NEW: Pass completion token
+        )
+      } catch (error) {
+        console.error('[RLProject] Failed to get completion token or submit score:', error)
+        setError('Failed to submit score. Please try again.')
+      }
     }
   }
 

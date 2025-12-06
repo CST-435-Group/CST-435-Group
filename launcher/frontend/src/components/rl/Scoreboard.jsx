@@ -74,7 +74,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
     }
   }
 
-  const addScore = async (playerName, time, score, distance, won, gameDifficulty, token) => {
+  const addScore = async (playerName, time, score, distance, won, gameDifficulty, token, completionToken) => {
     // Only save winning scores
     if (!won) return
 
@@ -85,16 +85,24 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
       return
     }
 
+    // Require completion token (proof of finishing game)
+    if (!completionToken) {
+      console.error('[Scoreboard] Cannot submit score: No completion token')
+      setError('Invalid game completion. Please finish the game again.')
+      return
+    }
+
     try {
       const scoreData = {
         name: playerName.trim() || 'Anonymous',
         time: Math.round(time * 10) / 10,
         score,
         distance,
-        difficulty: gameDifficulty || 'easy'
+        difficulty: gameDifficulty || 'easy',
+        completion_token: completionToken  // NEW: Required proof of game completion
       }
 
-      console.log('[Scoreboard] Submitting score:', scoreData)
+      console.log('[Scoreboard] Submitting score with completion token:', scoreData)
       const response = await rlAPI.submitScore(scoreData, token)
       console.log('[Scoreboard] Server response:', response.data)
 

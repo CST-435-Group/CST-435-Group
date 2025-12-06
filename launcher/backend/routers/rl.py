@@ -64,6 +64,7 @@ class ScoreEntry(BaseModel):
     score: int
     distance: int
     difficulty: str = 'easy'  # easy, medium, hard
+    completion_token: str  # Required: proof that player reached the goal
     timestamp: Optional[str] = None
     date: Optional[str] = None
 
@@ -1384,6 +1385,7 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 SCORES_DB_PATH = DATA_DIR / "rl_scores.json"
 USERS_DB_PATH = DATA_DIR / "rl_users.json"
 METRICS_DB_PATH = DATA_DIR / "rl_metrics.json"
+TOKENS_DB_PATH = DATA_DIR / "rl_completion_tokens.json"  # Track used completion tokens
 TRAINING_DATA_DIR = DATA_DIR / "training_data"
 
 # JWT Configuration
@@ -1529,6 +1531,99 @@ def save_scores(scores: List[Dict[str, Any]]):
         raise
 
 
+def load_used_tokens() -> List[str]:
+    """Load list of used completion tokens"""
+    if not TOKENS_DB_PATH.exists():
+        return []
+
+    try:
+        with open(TOKENS_DB_PATH, 'r') as f:
+            data = json.load(f)
+            # Clean up old tokens (older than 24 hours)
+            current_time = time.time()
+            data['tokens'] = [t for t in data.get('tokens', [])
+                            if current_time - t.get('used_at', 0) < 86400]
+            return [t['token'] for t in data['tokens']]
+    except Exception:
+        return []
+
+
+def mark_token_used(token: str):
+    """Mark a completion token as used (prevents reuse)"""
+    try:
+        TOKENS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing tokens
+        if TOKENS_DB_PATH.exists():
+            with open(TOKENS_DB_PATH, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {'tokens': []}
+
+        # Add new token with timestamp
+        data['tokens'].append({
+            'token': token,
+            'used_at': time.time()
+        })
+
+        # Save back
+        with open(TOKENS_DB_PATH, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Error marking token as used: {e}")
+        raise
+
+
+@router.post("/game-complete", summary="Generate Completion Token")
+def game_complete(request: Request, authorization: Optional[str] = Header(None)):
+    """
+    Generate a completion token when player reaches the goal.
+    This token must be submitted with the score to prove the game was actually completed.
+
+    Returns:
+        completion_token: JWT signed token proving goal was reached
+    """
+    # Require authentication
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Must be logged in to complete game"
+        )
+
+    try:
+        user = get_current_user(authorization)
+        user_id = user['user_id']
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Invalid or expired token"
+        )
+
+    # Generate unique completion token
+    token_id = str(uuid.uuid4())
+    payload = {
+        'type': 'game_completion',
+        'user_id': user_id,
+        'token_id': token_id,
+        'issued_at': time.time(),
+        'exp': datetime.utcnow() + timedelta(minutes=5)  # Token expires in 5 minutes
+    }
+
+    completion_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+    # Log completion
+    log_activity("game_completed", {
+        "user_id": user_id,
+        "token_id": token_id,
+        "ip": get_client_ip(request)
+    })
+
+    return {
+        "completion_token": completion_token,
+        "message": "Game completed! You can now submit your score."
+    }
+
+
 @router.get("/scores", summary="Get Leaderboard Scores")
 def get_scores(limit: int = 10, difficulty: str = 'easy'):
     """
@@ -1590,6 +1685,65 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
         raise HTTPException(
             status_code=401,
             detail="Unauthorized: Invalid or expired token"
+        )
+
+    # Validate completion token (CRITICAL: Prevents fake scores without finishing game)
+    try:
+        # Decode completion token
+        completion_payload = jwt.decode(
+            score_entry.completion_token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM]
+        )
+
+        # Validate token type and user
+        if completion_payload.get('type') != 'game_completion':
+            raise ValueError("Invalid token type")
+
+        if completion_payload.get('user_id') != user_id:
+            raise ValueError("Token user mismatch")
+
+        # Check if token already used (prevent reuse)
+        used_tokens = load_used_tokens()
+        if score_entry.completion_token in used_tokens:
+            log_activity("score_submission_denied", {
+                "ip": client_ip,
+                "username": player_name,
+                "user_id": user_id,
+                "reason": "token_already_used",
+                "difficulty": score_entry.difficulty
+            })
+            raise HTTPException(
+                status_code=400,
+                detail="This completion token has already been used. You must finish a new game."
+            )
+
+        # Mark token as used
+        mark_token_used(score_entry.completion_token)
+
+    except jwt.ExpiredSignatureError:
+        log_activity("score_submission_denied", {
+            "ip": client_ip,
+            "username": player_name,
+            "user_id": user_id,
+            "reason": "completion_token_expired",
+            "difficulty": score_entry.difficulty
+        })
+        raise HTTPException(
+            status_code=400,
+            detail="Completion token expired. Please finish the game again to submit score."
+        )
+    except (jwt.InvalidTokenError, ValueError) as e:
+        log_activity("score_submission_denied", {
+            "ip": client_ip,
+            "username": player_name,
+            "user_id": user_id,
+            "reason": "invalid_completion_token",
+            "difficulty": score_entry.difficulty
+        })
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid completion token. You must finish the game to submit a score."
         )
 
     # Load existing scores

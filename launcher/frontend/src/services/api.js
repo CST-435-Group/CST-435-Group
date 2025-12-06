@@ -155,6 +155,9 @@ export const rlAPI = {
   exportEpisodeCheckpointONNX: (episode) => api.post(`/rl/checkpoints/export-onnx/${episode}`),
   // Scoreboard
   getScores: (limit = 10, difficulty = 'easy') => api.get(`/rl/scores?limit=${limit}&difficulty=${difficulty}`),
+  requestCompletionToken: (token) => api.post('/rl/game-complete', {}, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+  }),
   submitScore: (scoreData, token) => api.post('/rl/scores', scoreData, {
     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
   }),
