@@ -173,6 +173,7 @@ export const rlAPI = {
   getStats: (token) => api.get('/rl/metrics/stats', {
     headers: { 'Authorization': `Bearer ${token}` }
   }),
+  getPlayerStats: (username) => api.get(`/rl/metrics/stats/${encodeURIComponent(username)}`),
 }
 
 // General API calls

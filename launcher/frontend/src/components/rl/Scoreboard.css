@@ -143,6 +143,22 @@
   white-space: nowrap;
 }
 
+.player-name-link {
+  color: #667eea;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.player-name-link:hover {
+  background: #f0f4ff;
+  text-decoration: underline;
+  transform: translateX(3px);
+}
+
 .col-time {
   font-weight: bold;
   color: #667eea;
@@ -229,6 +245,11 @@
   max-width: 400px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   animation: slideUp 0.3s ease;
+  position: relative;
+}
+
+.player-stats-modal {
+  max-width: 700px;
 }
 
 @keyframes slideUp {
@@ -313,6 +334,30 @@
 
 .password-cancel-btn:hover {
   background: #e0e0e0;
+}
+
+.close-modal-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: #999;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.close-modal-btn:hover {
+  background: #f0f0f0;
+  color: #333;
+  transform: rotate(90deg);
 }
 
 /* Responsive */

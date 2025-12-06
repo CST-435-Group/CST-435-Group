@@ -17,6 +17,11 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
   const [deleteTarget, setDeleteTarget] = useState(null) // {name, difficulty} for score to delete
   const [userStats, setUserStats] = useState(null)
 
+  // Player stats modal state
+  const [showPlayerStatsModal, setShowPlayerStatsModal] = useState(false)
+  const [selectedPlayerStats, setSelectedPlayerStats] = useState(null)
+  const [loadingPlayerStats, setLoadingPlayerStats] = useState(false)
+
   const ADMIN_PASSWORD = 'John117@home'
 
   // Load user stats when auth token changes
@@ -158,6 +163,27 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
     setDeleteTarget(null)
   }
 
+  const handlePlayerClick = async (playerName) => {
+    setLoadingPlayerStats(true)
+    setShowPlayerStatsModal(true)
+    setSelectedPlayerStats(null)
+
+    try {
+      const response = await rlAPI.getPlayerStats(playerName)
+      setSelectedPlayerStats(response.data)
+    } catch (error) {
+      console.error('Failed to load player stats:', error)
+      setSelectedPlayerStats({ error: 'Failed to load player stats' })
+    } finally {
+      setLoadingPlayerStats(false)
+    }
+  }
+
+  const handleClosePlayerStatsModal = () => {
+    setShowPlayerStatsModal(false)
+    setSelectedPlayerStats(null)
+  }
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
     const secs = (seconds % 60).toFixed(1)
@@ -211,6 +237,129 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Player Stats Modal */}
+      {showPlayerStatsModal && (
+        <div className="password-modal-overlay" onClick={handleClosePlayerStatsModal}>
+          <div className="password-modal player-stats-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={handleClosePlayerStatsModal}
+              className="close-modal-btn"
+              title="Close"
+            >
+              ✕
+            </button>
+
+            {loadingPlayerStats ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <p>Loading player stats...</p>
+              </div>
+            ) : selectedPlayerStats?.error ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <h3 style={{ color: '#f44336', marginBottom: '10px' }}>⚠️ Error</h3>
+                <p>{selectedPlayerStats.error}</p>
+                <button
+                  onClick={handleClosePlayerStatsModal}
+                  style={{ marginTop: '20px', padding: '10px 20px', cursor: 'pointer' }}
+                >
+                  Close
+                </button>
+              </div>
+            ) : selectedPlayerStats ? (
+              <div>
+                <h3 style={{ margin: '0 0 10px 0', color: '#667eea', fontSize: '1.5rem' }}>
+                  📊 {selectedPlayerStats.username}'s Stats
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: '#999', marginBottom: '20px' }}>
+                  Account created: {new Date(selectedPlayerStats.created_at).toLocaleDateString()}
+                </p>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                  gap: '15px',
+                  marginTop: '20px'
+                }}>
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '15px',
+                    background: 'linear-gradient(135deg, #f0f4ff, #e8f0ff)',
+                    borderRadius: '8px',
+                    border: '1px solid #667eea'
+                  }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#667eea' }}>
+                      {selectedPlayerStats.stats.total_games}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Games Played</div>
+                  </div>
+
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '15px',
+                    background: 'linear-gradient(135deg, #fff4e6, #ffe8cc)',
+                    borderRadius: '8px',
+                    border: '1px solid #ffa726'
+                  }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ffa726' }}>
+                      {selectedPlayerStats.stats.total_jumps}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Total Jumps</div>
+                  </div>
+
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '15px',
+                    background: 'linear-gradient(135deg, #f3e5f5, #e1bee7)',
+                    borderRadius: '8px',
+                    border: '1px solid #ab47bc'
+                  }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ab47bc' }}>
+                      {selectedPlayerStats.stats.total_points}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Total Points</div>
+                  </div>
+
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '15px',
+                    background: 'linear-gradient(135deg, #e8f5e9, #c8e6c9)',
+                    borderRadius: '8px',
+                    border: '1px solid #66bb6a'
+                  }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#66bb6a' }}>
+                      {selectedPlayerStats.stats.total_distance}m
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Total Distance</div>
+                  </div>
+
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '15px',
+                    background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)',
+                    borderRadius: '8px',
+                    border: '1px solid #ff9800'
+                  }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ff9800' }}>
+                      {Math.round(selectedPlayerStats.stats.total_playtime / 60)}min
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Total Playtime</div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '25px', textAlign: 'center' }}>
+                  <button
+                    onClick={handleClosePlayerStatsModal}
+                    className="password-cancel-btn"
+                    style={{ padding: '10px 30px' }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       )}
@@ -272,7 +421,15 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
                 {index === 2 && '🥉'}
                 {index > 2 && `#${index + 1}`}
               </div>
-              <div className="col-name">{score.name}</div>
+              <div className="col-name">
+                <span
+                  className="player-name-link"
+                  onClick={() => handlePlayerClick(score.name)}
+                  title={`View ${score.name}'s stats`}
+                >
+                  {score.name}
+                </span>
+              </div>
               <div className="col-time">{formatTime(score.time)}</div>
               <div className="col-score">{score.score}</div>
               <div className="col-distance">{score.distance}m</div>
