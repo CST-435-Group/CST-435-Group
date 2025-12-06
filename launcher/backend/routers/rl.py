@@ -3,7 +3,7 @@ RL Platformer Router
 Proxies requests to RL backend
 """
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -143,6 +143,68 @@ class TrainingDataBatch(BaseModel):
     session_metadata: dict = {}
 
 
+# ===== Helper Functions =====
+
+def get_client_ip(request: Request) -> str:
+    """
+    Extract real client IP address from request
+    Handles proxies and load balancers by checking X-Forwarded-For header
+    """
+    # Check if behind a proxy (X-Forwarded-For header)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
+        # First IP is the original client
+        return forwarded_for.split(",")[0].strip()
+
+    # Check X-Real-IP header (used by some proxies)
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    # Fall back to direct connection IP
+    return request.client.host if request.client else "unknown"
+
+
+def log_activity(activity_type: str, details: dict):
+    """
+    Log suspicious activity to audit log file
+
+    Args:
+        activity_type: Type of activity (e.g., "score_submission", "failed_login")
+        details: Dict with activity details (ip, username, etc.)
+    """
+    from datetime import datetime
+    import json
+
+    log_dir = DATA_DIR / "audit_logs"
+    log_dir.mkdir(exist_ok=True)
+
+    log_file = log_dir / f"activity_{datetime.utcnow().strftime('%Y-%m')}.json"
+
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "type": activity_type,
+        **details
+    }
+
+    # Append to monthly log file
+    try:
+        logs = []
+        if log_file.exists():
+            with open(log_file, 'r') as f:
+                logs = json.load(f)
+
+        logs.append(log_entry)
+
+        with open(log_file, 'w') as f:
+            json.dump(logs, f, indent=2)
+    except Exception as e:
+        print(f"Failed to log activity: {e}")
+
+
+# ===== Routes =====
+
 @router.get("/", summary="RL API Info")
 def rl_info():
     """Get RL API information"""
@@ -199,15 +261,22 @@ def debug_paths():
 # ============================================================================
 
 @router.post("/auth/register", summary="Register New User")
-def register_user(user_data: UserRegister):
+def register_user(user_data: UserRegister, request: Request):
     """
     Register a new user account
     Returns JWT token on success
+    Logs IP address for security monitoring
     """
+    client_ip = get_client_ip(request)
     users = load_users()
 
     # Check if username already exists
     if any(u['username'].lower() == user_data.username.lower() for u in users):
+        log_activity("registration_failed", {
+            "ip": client_ip,
+            "username": user_data.username,
+            "reason": "username_already_exists"
+        })
         raise HTTPException(status_code=400, detail="Username already exists")
 
     # Validate username (3-20 chars, alphanumeric + underscore)
@@ -230,11 +299,19 @@ def register_user(user_data: UserRegister):
         "total_jumps": 0,
         "total_points": 0,
         "total_distance": 0,
-        "total_playtime": 0.0
+        "total_playtime": 0.0,
+        "registration_ip": client_ip  # Store registration IP
     }
 
     users.append(new_user)
     save_users(users)
+
+    # Log successful registration
+    log_activity("user_registered", {
+        "ip": client_ip,
+        "username": user_data.username,
+        "user_id": user_id
+    })
 
     # Generate JWT token
     token = create_jwt_token(user_id, user_data.username)
@@ -253,22 +330,43 @@ def register_user(user_data: UserRegister):
 
 
 @router.post("/auth/login", summary="User Login")
-def login_user(user_data: UserLogin):
+def login_user(user_data: UserLogin, request: Request):
     """
     Login with username and password
     Returns JWT token on success
+    Logs IP address for security monitoring
     """
+    client_ip = get_client_ip(request)
     users = load_users()
 
     # Find user
     user = next((u for u in users if u['username'].lower() == user_data.username.lower()), None)
 
     if not user:
+        # Log failed login attempt
+        log_activity("login_failed", {
+            "ip": client_ip,
+            "username": user_data.username,
+            "reason": "user_not_found"
+        })
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     # Verify password
     if not verify_password(user_data.password, user['password_hash']):
+        # Log failed login attempt
+        log_activity("login_failed", {
+            "ip": client_ip,
+            "username": user_data.username,
+            "reason": "invalid_password"
+        })
         raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    # Log successful login
+    log_activity("user_login", {
+        "ip": client_ip,
+        "username": user['username'],
+        "user_id": user['user_id']
+    })
 
     # Generate JWT token
     token = create_jwt_token(user['user_id'], user['username'])
@@ -1446,13 +1544,17 @@ def get_scores(limit: int = 10, difficulty: str = 'easy'):
 
 
 @router.post("/scores", summary="Submit Score to Leaderboard")
-def submit_score(score_entry: ScoreEntry, authorization: Optional[str] = Header(None)):
+def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optional[str] = Header(None)):
     """
     Submit a new score to the global leaderboard
     If logged in, score is linked to user_id
     If player already has a score for this difficulty, only updates if new time is better (faster)
+    Logs IP addresses for security and abuse detection
     """
     from datetime import datetime
+
+    # Get client IP for logging
+    client_ip = get_client_ip(request)
 
     # Get user if authenticated
     user = None
@@ -1475,6 +1577,17 @@ def submit_score(score_entry: ScoreEntry, authorization: Optional[str] = Header(
 
     # Validate score legitimacy (prevent fake/cheated scores)
     if score_entry.time <= 0 or score_entry.distance < 0 or score_entry.score < 0:
+        # Log suspicious activity
+        log_activity("invalid_score_rejected", {
+            "ip": client_ip,
+            "username": player_name,
+            "user_id": user_id,
+            "time": score_entry.time,
+            "score": score_entry.score,
+            "distance": score_entry.distance,
+            "difficulty": score_entry.difficulty
+        })
+
         raise HTTPException(
             status_code=400,
             detail="Invalid score: time must be > 0, distance and score must be >= 0"
@@ -1489,7 +1602,8 @@ def submit_score(score_entry: ScoreEntry, authorization: Optional[str] = Header(
         "difficulty": score_entry.difficulty,
         "timestamp": datetime.utcnow().isoformat(),
         "date": datetime.utcnow().strftime("%Y-%m-%d"),
-        "user_id": user_id  # Link to user if authenticated
+        "user_id": user_id,  # Link to user if authenticated
+        "ip_address": client_ip  # Store IP for abuse tracking
     }
 
     # Check if player already exists for this difficulty
@@ -1513,6 +1627,19 @@ def submit_score(score_entry: ScoreEntry, authorization: Optional[str] = Header(
             previous_time = scores[existing_index]['time']
             scores[existing_index] = new_score
             save_scores(scores)
+
+            # Log score update
+            log_activity("score_updated", {
+                "ip": client_ip,
+                "username": player_name,
+                "user_id": user_id,
+                "difficulty": new_score['difficulty'],
+                "new_time": new_score['time'],
+                "previous_time": previous_time,
+                "score": new_score['score'],
+                "distance": new_score['distance']
+            })
+
             return {
                 "status": "updated",
                 "message": f"New best time for {new_score['name']} on {new_score['difficulty']}!",
@@ -1530,6 +1657,18 @@ def submit_score(score_entry: ScoreEntry, authorization: Optional[str] = Header(
         # Add new player for this difficulty
         scores.append(new_score)
         save_scores(scores)
+
+        # Log new score submission
+        log_activity("score_created", {
+            "ip": client_ip,
+            "username": player_name,
+            "user_id": user_id,
+            "difficulty": new_score['difficulty'],
+            "time": new_score['time'],
+            "score": new_score['score'],
+            "distance": new_score['distance']
+        })
+
         return {
             "status": "created",
             "message": f"Score added for {new_score['name']} on {new_score['difficulty']}",
