@@ -1596,8 +1596,12 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
     scores = load_scores()
 
     # Validate score legitimacy (prevent fake/cheated scores)
-    if score_entry.time <= 0 or score_entry.distance < 0 or score_entry.score < 0:
-        # Log suspicious activity
+    # Minimum 1 second required (prevents 0.01 exploit that rounds to 0.0)
+    MIN_TIME = 1.0
+    MIN_DISTANCE = 100  # Must move at least 100 pixels to have a valid run
+
+    # Basic validation
+    if score_entry.time < MIN_TIME or score_entry.distance < MIN_DISTANCE or score_entry.score < 0:
         log_activity("invalid_score_rejected", {
             "ip": client_ip,
             "username": player_name,
@@ -1605,12 +1609,55 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
             "time": score_entry.time,
             "score": score_entry.score,
             "distance": score_entry.distance,
-            "difficulty": score_entry.difficulty
+            "difficulty": score_entry.difficulty,
+            "reason": "basic_validation_failed"
         })
 
         raise HTTPException(
             status_code=400,
-            detail="Invalid score: time must be > 0, distance and score must be >= 0"
+            detail=f"Invalid score: time must be >= {MIN_TIME}s, distance must be >= {MIN_DISTANCE}, score must be >= 0"
+        )
+
+    # Validate score vs distance relationship
+    # Score = distance/100 + coins*10, so max realistic score is ~distance/50 (lots of coins)
+    # Min realistic score is ~distance/200 (no coins)
+    max_realistic_score = score_entry.distance / 20  # Very generous upper bound
+    if score_entry.score > max_realistic_score:
+        log_activity("invalid_score_rejected", {
+            "ip": client_ip,
+            "username": player_name,
+            "user_id": user_id,
+            "time": score_entry.time,
+            "score": score_entry.score,
+            "distance": score_entry.distance,
+            "difficulty": score_entry.difficulty,
+            "reason": "score_too_high_for_distance"
+        })
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid score: score is impossibly high for distance traveled"
+        )
+
+    # Validate distance vs time relationship (prevent impossible speeds)
+    # Max speed: ~10 pixels/frame * 60 frames/sec = 600 pixels/sec
+    # Give generous buffer: 1000 pixels/sec
+    max_realistic_distance = score_entry.time * 1000
+    if score_entry.distance > max_realistic_distance:
+        log_activity("invalid_score_rejected", {
+            "ip": client_ip,
+            "username": player_name,
+            "user_id": user_id,
+            "time": score_entry.time,
+            "score": score_entry.score,
+            "distance": score_entry.distance,
+            "difficulty": score_entry.difficulty,
+            "reason": "distance_too_high_for_time"
+        })
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid score: distance is impossibly high for time elapsed"
         )
 
     # Create new score entry

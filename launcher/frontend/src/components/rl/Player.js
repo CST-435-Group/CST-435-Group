@@ -116,8 +116,8 @@ export class Player {
   moveLeft() {
     const speed = this.isSprinting ? this.speed * 1.5 : this.speed
     if (this.onIcePlatform) {
-      // On ice: add to velocity (acceleration-based for sliding)
-      this.velocityX -= speed * 0.3  // 30% acceleration on ice
+      // On ice: gradual acceleration + low friction = slippery slide
+      this.velocityX -= speed * 0.6  // 60% acceleration on ice (gradual build-up)
     } else {
       // Normal: direct control
       this.velocityX = -speed
@@ -127,8 +127,8 @@ export class Player {
   moveRight() {
     const speed = this.isSprinting ? this.speed * 1.5 : this.speed
     if (this.onIcePlatform) {
-      // On ice: add to velocity (acceleration-based for sliding)
-      this.velocityX += speed * 0.3  // 30% acceleration on ice
+      // On ice: gradual acceleration + low friction = slippery slide
+      this.velocityX += speed * 0.6  // 60% acceleration on ice (gradual build-up)
     } else {
       // Normal: direct control
       this.velocityX = speed
@@ -154,7 +154,12 @@ export class Player {
   }
 
   stopMovement() {
-    this.velocityX = 0
+    // On ice: let friction handle deceleration (sliding effect)
+    // On normal ground: stop immediately
+    if (!this.onIcePlatform) {
+      this.velocityX = 0
+    }
+    // If on ice, don't set to 0 - let the friction in update() slow you down
   }
 
   die() {

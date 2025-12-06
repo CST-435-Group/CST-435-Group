@@ -112,8 +112,8 @@ class Player:
         """Move player left (or faster if sprinting)"""
         speed = self.speed * 1.5 if self.isSprinting else self.speed
         if self.onIcePlatform:
-            # On ice: add to velocity (acceleration-based for sliding)
-            self.velocityX -= speed * 0.3  # 30% acceleration on ice
+            # On ice: gradual acceleration + low friction = slippery slide
+            self.velocityX -= speed * 0.6  # 60% acceleration on ice (gradual build-up)
         else:
             # Normal: direct control
             self.velocityX = -speed
@@ -122,8 +122,8 @@ class Player:
         """Move player right (or faster if sprinting)"""
         speed = self.speed * 1.5 if self.isSprinting else self.speed
         if self.onIcePlatform:
-            # On ice: add to velocity (acceleration-based for sliding)
-            self.velocityX += speed * 0.3  # 30% acceleration on ice
+            # On ice: gradual acceleration + low friction = slippery slide
+            self.velocityX += speed * 0.6  # 60% acceleration on ice (gradual build-up)
         else:
             # Normal: direct control
             self.velocityX = speed
@@ -144,7 +144,11 @@ class Player:
 
     def stopMovement(self):
         """Stop horizontal movement"""
-        self.velocityX = 0
+        # On ice: let friction handle deceleration (sliding effect)
+        # On normal ground: stop immediately
+        if not self.onIcePlatform:
+            self.velocityX = 0
+        # If on ice, don't set to 0 - let the friction in update() slow you down
 
     def die(self):
         """Kill the player"""
