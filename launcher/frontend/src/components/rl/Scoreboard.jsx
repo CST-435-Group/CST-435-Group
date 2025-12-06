@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { rlAPI } from '../../services/api'
 import './Scoreboard.css'
 
+// Scale factor for displaying distance (distance is calculated in pixels, so we scale it down)
+const DISTANCE_SCALE = 5
+
 /**
  * Scoreboard component for displaying and managing player scores
  * Uses backend API with shared database for global leaderboard
@@ -351,7 +354,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
                     border: '1px solid #66bb6a'
                   }}>
                     <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#66bb6a' }}>
-                      {selectedPlayerStats.stats.total_distance}m
+                      {Math.round(selectedPlayerStats.stats.total_distance / DISTANCE_SCALE)}m
                     </div>
                     <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '5px' }}>Total Distance</div>
                   </div>
@@ -456,7 +459,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
               </div>
               <div className="col-time">{formatTime(score.time)}</div>
               <div className="col-score">{score.score}</div>
-              <div className="col-distance">{score.distance}m</div>
+              <div className="col-distance">{Math.round(score.distance / DISTANCE_SCALE)}m</div>
               <div className="col-date">{score.date}</div>
               <div className="col-actions">
                 <button
@@ -505,7 +508,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
             </div>
             <div style={{ textAlign: 'center', padding: '10px', background: 'white', borderRadius: '8px' }}>
               <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#667eea' }}>
-                {userStats.total_distance}m
+                {Math.round(userStats.total_distance / DISTANCE_SCALE)}m
               </div>
               <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '3px' }}>Total Distance</div>
             </div>

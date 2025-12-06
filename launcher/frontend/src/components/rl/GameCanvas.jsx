@@ -5,6 +5,9 @@ import { Player } from './Player'
 import AIPlayer from './AIPlayer'
 import './GameCanvas.css'
 
+// Scale factor for displaying distance (distance is calculated in pixels, so we scale it down)
+const DISTANCE_SCALE = 5
+
 /**
  * Main game canvas component
  * Handles rendering, input, and game loop
@@ -210,14 +213,14 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
         setGameState('won')
         const finalStats = {
           score: game.player.score,
-          distance: Math.floor(game.player.distance),
+          distance: Math.floor(game.player.distance / DISTANCE_SCALE),
           aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0,
+          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance / DISTANCE_SCALE) : 0,
           time: finalTime
         }
         setStats(finalStats)
 
-        // Notify parent component with completion data
+        // Notify parent component with completion data (raw distance for backend storage)
         if (onGameComplete) {
           onGameComplete({
             won: true,
@@ -232,14 +235,14 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
         setGameState('lost')
         const finalStats = {
           score: game.player.score,
-          distance: Math.floor(game.player.distance),
+          distance: Math.floor(game.player.distance / DISTANCE_SCALE),
           aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0,
+          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance / DISTANCE_SCALE) : 0,
           time: finalTime
         }
         setStats(finalStats)
 
-        // Notify parent component
+        // Notify parent component (raw distance for backend storage)
         if (onGameComplete) {
           onGameComplete({
             won: false,
@@ -349,9 +352,9 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     // Update stats display
     setStats({
       score: player.score,
-      distance: Math.floor(player.distance),
+      distance: Math.floor(player.distance / DISTANCE_SCALE),
       aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-      aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance) : 0,
+      aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance / DISTANCE_SCALE) : 0,
       time: game.elapsedTime || 0
     })
   }
@@ -531,7 +534,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       ctx.fillText('YOU (Human)', 20, 35)
       ctx.font = 'bold 16px Arial'
       ctx.fillText(`Score: ${player.score}`, 20, 60)
-      ctx.fillText(`Distance: ${Math.floor(player.distance)}m`, 20, 85)
+      ctx.fillText(`Distance: ${Math.floor(player.distance / DISTANCE_SCALE)}m`, 20, 85)
       ctx.fillText(`Time: ${formatTime(game.elapsedTime || 0)}`, 20, 110)
 
       ctx.fillStyle = 'rgba(255, 107, 107, 0.9)' // Red for AI
@@ -542,7 +545,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       ctx.fillText('AI Opponent', canvas.width - 290, 35)
       ctx.font = 'bold 16px Arial'
       ctx.fillText(`Score: ${game.aiPlayer.score}`, canvas.width - 290, 60)
-      ctx.fillText(`Distance: ${Math.floor(game.aiPlayer.distance)}m`, canvas.width - 290, 85)
+      ctx.fillText(`Distance: ${Math.floor(game.aiPlayer.distance / DISTANCE_SCALE)}m`, canvas.width - 290, 85)
 
       // Show episode number if playing against episode model
       if (playingEpisode !== null) {
@@ -573,7 +576,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       ctx.fillStyle = '#FFD700'
       ctx.font = 'bold 20px Arial'
       ctx.fillText(`Score: ${player.score}`, 20, 40)
-      ctx.fillText(`Distance: ${Math.floor(player.distance)}m`, 20, 70)
+      ctx.fillText(`Distance: ${Math.floor(player.distance / DISTANCE_SCALE)}m`, 20, 70)
       ctx.fillText(`Time: ${formatTime(game.elapsedTime || 0)}`, 20, 95)
     }
 
