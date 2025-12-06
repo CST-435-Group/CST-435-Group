@@ -1755,6 +1755,13 @@ def delete_score(
     if not is_admin:
         try:
             if not authorization:
+                # Log unauthorized deletion attempt
+                log_activity("score_delete_denied", {
+                    "ip": client_ip,
+                    "attempted_delete": player_name,
+                    "difficulty": difficulty,
+                    "reason": "no_authentication"
+                })
                 raise HTTPException(
                     status_code=401,
                     detail="Unauthorized: Must be logged in to delete your own score, or use admin password"
@@ -1768,6 +1775,7 @@ def delete_score(
                     "ip": client_ip,
                     "username": user['username'],
                     "attempted_delete": player_name,
+                    "difficulty": difficulty,
                     "reason": "not_own_score"
                 })
                 raise HTTPException(
@@ -1777,6 +1785,13 @@ def delete_score(
         except HTTPException:
             raise
         except Exception:
+            # Log invalid token attempt
+            log_activity("score_delete_denied", {
+                "ip": client_ip,
+                "attempted_delete": player_name,
+                "difficulty": difficulty,
+                "reason": "invalid_token"
+            })
             raise HTTPException(
                 status_code=401,
                 detail="Unauthorized: Invalid token or admin password required"

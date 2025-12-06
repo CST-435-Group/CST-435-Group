@@ -158,8 +158,12 @@ export const rlAPI = {
   submitScore: (scoreData, token) => api.post('/rl/scores', scoreData, {
     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
   }),
-  clearScores: () => api.delete('/rl/scores'),
-  deleteScore: (playerName, difficulty) => api.delete(`/rl/scores/${encodeURIComponent(playerName)}/${difficulty}`),
+  clearScores: (adminPassword) => api.delete('/rl/scores', {
+    params: adminPassword ? { admin_password: adminPassword } : {}
+  }),
+  deleteScore: (playerName, difficulty, adminPassword) => api.delete(`/rl/scores/${encodeURIComponent(playerName)}/${difficulty}`, {
+    params: adminPassword ? { admin_password: adminPassword } : {}
+  }),
   // Authentication
   register: (username, password) => api.post('/rl/auth/register', { username, password }),
   login: (username, password) => api.post('/rl/auth/login', { username, password }),

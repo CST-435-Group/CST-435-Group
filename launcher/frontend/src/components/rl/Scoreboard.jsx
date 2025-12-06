@@ -25,8 +25,6 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
   const [selectedPlayerStats, setSelectedPlayerStats] = useState(null)
   const [loadingPlayerStats, setLoadingPlayerStats] = useState(false)
 
-  const ADMIN_PASSWORD = 'John117@home'
-
   // Load user stats when auth token changes
   useEffect(() => {
     if (authToken && currentUser) {
@@ -137,40 +135,59 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault()
 
-    if (passwordInput !== ADMIN_PASSWORD) {
-      setPasswordError('Incorrect password. Access denied.')
-      setPasswordInput('')
+    // Don't validate password on frontend - let backend do it securely
+    if (!passwordInput.trim()) {
+      setPasswordError('Please enter a password')
       return
     }
-
-    // Password correct
-    setShowPasswordPrompt(false)
-    setPasswordInput('')
-    setPasswordError('')
 
     try {
       if (deleteTarget) {
         // Delete individual score
         if (!window.confirm(`Are you sure you want to delete ${deleteTarget.name}'s score from the ${deleteTarget.difficulty} leaderboard?`)) {
           setDeleteTarget(null)
+          setShowPasswordPrompt(false)
+          setPasswordInput('')
           return
         }
 
-        await rlAPI.deleteScore(deleteTarget.name, deleteTarget.difficulty)
+        // Send password to backend for validation
+        await rlAPI.deleteScore(deleteTarget.name, deleteTarget.difficulty, passwordInput)
+
+        // Success!
+        setShowPasswordPrompt(false)
+        setPasswordInput('')
+        setPasswordError('')
         setDeleteTarget(null)
         await loadScores() // Reload to show updated leaderboard
       } else {
         // Clear all scores
         if (!window.confirm('Are you sure you want to clear ALL scores from the global leaderboard? This will affect all players!')) {
+          setShowPasswordPrompt(false)
+          setPasswordInput('')
           return
         }
 
-        await rlAPI.clearScores()
+        // Send password to backend for validation
+        await rlAPI.clearScores(passwordInput)
+
+        // Success!
+        setShowPasswordPrompt(false)
+        setPasswordInput('')
+        setPasswordError('')
         await loadScores() // Reload to show empty leaderboard
       }
     } catch (err) {
       console.error('Failed to modify scores:', err)
-      alert('Failed to modify scores. Please try again.')
+
+      // Check if it's an authentication error
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setPasswordError('Incorrect password. Access denied.')
+      } else {
+        setPasswordError('Failed to modify scores. Please try again.')
+      }
+
+      setPasswordInput('')
       setDeleteTarget(null)
     }
   }
