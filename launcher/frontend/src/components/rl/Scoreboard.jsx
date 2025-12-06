@@ -80,6 +80,13 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
     // Only save winning scores
     if (!won) return
 
+    // Require authentication to submit scores
+    if (!token) {
+      console.error('[Scoreboard] Cannot submit score: User must be logged in')
+      setError('You must be logged in to submit scores to the leaderboard')
+      return
+    }
+
     try {
       const scoreData = {
         name: playerName.trim() || 'Anonymous',
@@ -100,7 +107,16 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
       }
     } catch (err) {
       console.error('Failed to submit score:', err)
-      // Don't show error to user, just log it
+
+      // Show authentication errors to user
+      if (err.response?.status === 401) {
+        setError('Authentication failed: Please log in again to submit scores')
+      } else if (err.response?.status === 400) {
+        setError('Invalid score: ' + (err.response?.data?.detail || 'Score validation failed'))
+      } else {
+        // Don't show other errors to avoid cluttering UI
+        console.error('[Scoreboard] Score submission error:', err.message)
+      }
     }
   }
 
