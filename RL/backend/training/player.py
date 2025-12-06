@@ -69,6 +69,10 @@ class Player:
             if self.onIcePlatform:
                 # Ice: very low friction (0.95 = keeps 95% of velocity)
                 self.velocityX *= 0.95
+                # Cap velocity on ice to prevent infinite acceleration
+                max_ice_velocity = 15
+                if abs(self.velocityX) > max_ice_velocity:
+                    self.velocityX = math.copysign(max_ice_velocity, self.velocityX)
             else:
                 # Normal: high friction (0.7 = keeps 70% of velocity)
                 self.velocityX *= 0.7
@@ -107,12 +111,22 @@ class Player:
     def moveLeft(self):
         """Move player left (or faster if sprinting)"""
         speed = self.speed * 1.5 if self.isSprinting else self.speed
-        self.velocityX = -speed
+        if self.onIcePlatform:
+            # On ice: add to velocity (acceleration-based for sliding)
+            self.velocityX -= speed * 0.3  # 30% acceleration on ice
+        else:
+            # Normal: direct control
+            self.velocityX = -speed
 
     def moveRight(self):
         """Move player right (or faster if sprinting)"""
         speed = self.speed * 1.5 if self.isSprinting else self.speed
-        self.velocityX = speed
+        if self.onIcePlatform:
+            # On ice: add to velocity (acceleration-based for sliding)
+            self.velocityX += speed * 0.3  # 30% acceleration on ice
+        else:
+            # Normal: direct control
+            self.velocityX = speed
 
     def jump(self):
         """Jump if on ground and not already jumping"""

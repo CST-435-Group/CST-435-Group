@@ -83,6 +83,11 @@ export class Player {
       if (this.onIcePlatform) {
         // Ice: very low friction (0.95 = keeps 95% of velocity)
         this.velocityX *= 0.95
+        // Cap velocity on ice to prevent infinite acceleration
+        const maxIceVelocity = 15
+        if (Math.abs(this.velocityX) > maxIceVelocity) {
+          this.velocityX = Math.sign(this.velocityX) * maxIceVelocity
+        }
       } else {
         // Normal: high friction (0.7 = keeps 70% of velocity)
         this.velocityX *= 0.7
@@ -110,12 +115,24 @@ export class Player {
 
   moveLeft() {
     const speed = this.isSprinting ? this.speed * 1.5 : this.speed
-    this.velocityX = -speed
+    if (this.onIcePlatform) {
+      // On ice: add to velocity (acceleration-based for sliding)
+      this.velocityX -= speed * 0.3  // 30% acceleration on ice
+    } else {
+      // Normal: direct control
+      this.velocityX = -speed
+    }
   }
 
   moveRight() {
     const speed = this.isSprinting ? this.speed * 1.5 : this.speed
-    this.velocityX = speed
+    if (this.onIcePlatform) {
+      // On ice: add to velocity (acceleration-based for sliding)
+      this.velocityX += speed * 0.3  // 30% acceleration on ice
+    } else {
+      // Normal: direct control
+      this.velocityX = speed
+    }
   }
 
   jump() {
