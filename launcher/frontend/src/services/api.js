@@ -178,6 +178,8 @@ export const rlAPI = {
   updateProfile: (profileData, token) => api.put('/rl/auth/profile', profileData, {
     headers: { 'Authorization': `Bearer ${token}` }
   }),
+  // Training Data
+  submitTrainingData: (trainingBatch) => api.post('/rl/training/data', trainingBatch),
 }
 
 // General API calls

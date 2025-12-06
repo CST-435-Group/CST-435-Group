@@ -96,6 +96,46 @@ class GameMetrics(BaseModel):
     time_played: float
 
 
+class TrainingDataPoint(BaseModel):
+    """Single state-action pair for AI training"""
+    # Player state
+    player_x: float
+    player_y: float
+    player_vx: float
+    player_vy: float
+    player_on_ground: bool
+
+    # Nearest platforms (relative positions)
+    platform_below_x: Optional[float] = None  # Relative X to nearest platform below
+    platform_below_y: Optional[float] = None  # Relative Y to nearest platform below
+    platform_ahead_x: Optional[float] = None  # Relative X to nearest platform ahead
+    platform_ahead_y: Optional[float] = None  # Relative Y to nearest platform ahead
+
+    # Goal position (relative)
+    goal_x: float
+    goal_y: float
+
+    # Action taken by human
+    action_left: bool
+    action_right: bool
+    action_jump: bool
+    action_sprint: bool
+
+    # Metadata
+    frame_number: int
+    difficulty: str
+    timestamp: str
+
+
+class TrainingDataBatch(BaseModel):
+    """Batch of training data from a gameplay session"""
+    session_id: str
+    username: str
+    difficulty: str
+    data_points: List[TrainingDataPoint]
+    session_metadata: dict = {}
+
+
 @router.get("/", summary="RL API Info")
 def rl_info():
     """Get RL API information"""
@@ -1155,6 +1195,7 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 SCORES_DB_PATH = DATA_DIR / "rl_scores.json"
 USERS_DB_PATH = DATA_DIR / "rl_users.json"
 METRICS_DB_PATH = DATA_DIR / "rl_metrics.json"
+TRAINING_DATA_DIR = DATA_DIR / "training_data"
 
 # JWT Secret (in production, use environment variable)
 JWT_SECRET = "your-secret-key-change-in-production"
@@ -1568,3 +1609,55 @@ def get_player_stats(username: str):
         "created_at": first_played,
         "note": "This player is not registered. Stats are estimated from leaderboard scores."
     }
+
+
+@router.post("/training/data", summary="Submit Training Data")
+def submit_training_data(batch: TrainingDataBatch):
+    """
+    Submit a batch of training data from human gameplay
+    Used for behavioral cloning / imitation learning
+
+    Data includes state-action pairs: what the human did given the game state
+    """
+    from datetime import datetime
+    import json
+
+    try:
+        # Create training data directory if it doesn't exist
+        TRAINING_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Organize by date and difficulty
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        date_dir = TRAINING_DATA_DIR / today
+        date_dir.mkdir(exist_ok=True)
+
+        # Create filename with session ID and timestamp
+        timestamp = datetime.utcnow().strftime("%H-%M-%S")
+        filename = f"{batch.session_id}_{batch.username}_{batch.difficulty}_{timestamp}.json"
+        filepath = date_dir / filename
+
+        # Prepare data for storage
+        data_to_save = {
+            "session_id": batch.session_id,
+            "username": batch.username,
+            "difficulty": batch.difficulty,
+            "num_data_points": len(batch.data_points),
+            "session_metadata": batch.session_metadata,
+            "collected_at": datetime.utcnow().isoformat(),
+            "data_points": [point.dict() for point in batch.data_points]
+        }
+
+        # Save to file
+        with open(filepath, 'w') as f:
+            json.dump(data_to_save, f, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Saved {len(batch.data_points)} training data points",
+            "filepath": str(filepath.relative_to(DATA_DIR)),
+            "num_points": len(batch.data_points)
+        }
+
+    except Exception as e:
+        print(f"Error saving training data: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save training data: {str(e)}")

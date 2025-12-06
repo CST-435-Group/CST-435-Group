@@ -998,6 +998,7 @@ function RLProject() {
                   onGameComplete={handleGameComplete}
                   difficulty={difficulty}
                   playerColor={currentUser?.player_color}
+                  username={currentUser?.username || 'Anonymous'}
                 />
               </div>
             )}

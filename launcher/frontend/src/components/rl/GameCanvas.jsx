@@ -3,10 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { MapGenerator } from './MapGenerator'
 import { Player } from './Player'
 import AIPlayer from './AIPlayer'
+import { rlAPI } from '../../services/api'
 import './GameCanvas.css'
 
 // Scale factor for displaying distance (distance is calculated in pixels, so we scale it down)
 const DISTANCE_SCALE = 20
+
+// Training data collection
+const TRAINING_DATA_BATCH_SIZE = 500 // Send every 500 frames
+const COLLECT_TRAINING_DATA = true // Set to false to disable data collection
 
 /**
  * Main game canvas component
@@ -17,11 +22,16 @@ const DISTANCE_SCALE = 20
  * @param {function} onGameComplete - Callback when game completes with time and stats
  * @param {string} difficulty - Game difficulty (easy, medium, hard)
  */
-export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPath = null, playingEpisode = null, onGameComplete, difficulty = 'easy', playerColor = '#4CAF50' }) {
+export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPath = null, playingEpisode = null, onGameComplete, difficulty = 'easy', playerColor = '#4CAF50', username = 'Anonymous' }) {
   const canvasRef = useRef(null)
   const navigate = useNavigate()
   const [gameState, setGameState] = useState('playing') // playing, won, lost
   const [stats, setStats] = useState({ score: 0, distance: 0, aiScore: 0, aiDistance: 0, time: 0 })
+
+  // Training data collection
+  const trainingDataRef = useRef([])
+  const sessionIdRef = useRef(`${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
+  const frameNumberRef = useRef(0)
   const [aiStatus, setAiStatus] = useState('loading') // loading, ready, error, disabled
   const [loadingProgress, setLoadingProgress] = useState(0)
   const [loadingMessage, setLoadingMessage] = useState('')
@@ -202,6 +212,42 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       // Render
       renderGame(ctx, game)
 
+      // Collect training data (if enabled and player is alive)
+      if (COLLECT_TRAINING_DATA && game.player.isAlive && !enableAI) {
+        frameNumberRef.current++
+
+        // Extract state features
+        const stateFeatures = extractStateFeatures(game)
+
+        // Determine actions from current keys pressed
+        const actionLeft = !!(game.keys['ArrowLeft'] || game.keys['a'] || game.keys['A'])
+        const actionRight = !!(game.keys['ArrowRight'] || game.keys['d'] || game.keys['D'])
+        const actionJump = !!(game.keys['ArrowUp'] || game.keys[' '] || game.keys['w'] || game.keys['W'])
+        const actionSprint = !!(game.keys['Shift'])
+
+        // Create training data point
+        const dataPoint = {
+          ...stateFeatures,
+          action_left: actionLeft,
+          action_right: actionRight,
+          action_jump: actionJump,
+          action_sprint: actionSprint,
+          frame_number: frameNumberRef.current,
+          difficulty: difficulty,
+          timestamp: new Date().toISOString()
+        }
+
+        // Add to batch
+        trainingDataRef.current.push(dataPoint)
+
+        // Send batch if it reaches the batch size
+        if (trainingDataRef.current.length >= TRAINING_DATA_BATCH_SIZE) {
+          const batchToSend = [...trainingDataRef.current]
+          trainingDataRef.current = [] // Clear the batch
+          sendTrainingDataBatch(batchToSend)
+        }
+      }
+
       // Check game state
       const humanWon = game.player.checkGoalReached(game.map.goal)
       const humanLost = !game.player.isAlive
@@ -219,6 +265,17 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
           time: finalTime
         }
         setStats(finalStats)
+
+        // Send remaining training data
+        if (COLLECT_TRAINING_DATA && trainingDataRef.current.length > 0) {
+          sendTrainingDataBatch(trainingDataRef.current, {
+            game_outcome: 'won',
+            final_time: finalTime,
+            final_score: game.player.score,
+            final_distance: Math.floor(game.player.distance)
+          })
+          trainingDataRef.current = []
+        }
 
         // Notify parent component with completion data (raw distance for backend storage)
         if (onGameComplete) {
@@ -241,6 +298,17 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
           time: finalTime
         }
         setStats(finalStats)
+
+        // Send remaining training data
+        if (COLLECT_TRAINING_DATA && trainingDataRef.current.length > 0) {
+          sendTrainingDataBatch(trainingDataRef.current, {
+            game_outcome: 'lost',
+            final_time: finalTime,
+            final_score: game.player.score,
+            final_distance: Math.floor(game.player.distance)
+          })
+          trainingDataRef.current = []
+        }
 
         // Notify parent component (raw distance for backend storage)
         if (onGameComplete) {
@@ -598,6 +666,72 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
   const handleBackToHome = () => {
     // Navigate to home page
     navigate('/')
+  }
+
+  // Helper function to extract state features for training data
+  const extractStateFeatures = (game) => {
+    const { player, map } = game
+    const platforms = map.platforms
+
+    // Find nearest platform below (for landing prediction)
+    let nearestBelow = null
+    let minDistBelow = Infinity
+    for (const platform of platforms) {
+      if (platform.y > player.y + player.height && platform.x < player.x + 500 && platform.x + platform.width > player.x - 100) {
+        const dist = Math.abs(platform.x - player.x) + (platform.y - player.y)
+        if (dist < minDistBelow) {
+          minDistBelow = dist
+          nearestBelow = platform
+        }
+      }
+    }
+
+    // Find nearest platform ahead (for jumping prediction)
+    let nearestAhead = null
+    let minDistAhead = Infinity
+    for (const platform of platforms) {
+      if (platform.x > player.x && platform.x < player.x + 600) {
+        const dist = Math.abs(platform.x - player.x) + Math.abs(platform.y - player.y)
+        if (dist < minDistAhead) {
+          minDistAhead = dist
+          nearestAhead = platform
+        }
+      }
+    }
+
+    return {
+      player_x: player.x,
+      player_y: player.y,
+      player_vx: player.velocityX,
+      player_vy: player.velocityY,
+      player_on_ground: player.isOnGround,
+      platform_below_x: nearestBelow ? nearestBelow.x - player.x : null,
+      platform_below_y: nearestBelow ? nearestBelow.y - player.y : null,
+      platform_ahead_x: nearestAhead ? nearestAhead.x - player.x : null,
+      platform_ahead_y: nearestAhead ? nearestAhead.y - player.y : null,
+      goal_x: map.goal.x - player.x,
+      goal_y: map.goal.y - player.y
+    }
+  }
+
+  // Helper function to send training data batch to backend
+  const sendTrainingDataBatch = async (batch, sessionMetadata = {}) => {
+    if (batch.length === 0) return
+
+    try {
+      const trainingBatch = {
+        session_id: sessionIdRef.current,
+        username: username || 'Anonymous',
+        difficulty: difficulty,
+        data_points: batch,
+        session_metadata: sessionMetadata
+      }
+
+      await rlAPI.submitTrainingData(trainingBatch)
+      console.log(`[Training Data] Sent ${batch.length} data points to server`)
+    } catch (error) {
+      console.error('[Training Data] Failed to send batch:', error)
+    }
   }
 
   const formatTime = (seconds) => {
