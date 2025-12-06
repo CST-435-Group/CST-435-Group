@@ -219,6 +219,18 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
         // Extract state features
         const stateFeatures = extractStateFeatures(game)
 
+        // Add player score to state for reward calculation
+        const currentState = {
+          ...stateFeatures,
+          player_score: game.player.score
+        }
+
+        // Calculate RL-style reward
+        const reward = calculateReward(game.prevState, currentState, game)
+
+        // Store current state for next frame's reward calculation
+        game.prevState = currentState
+
         // Determine actions from current keys pressed
         const actionLeft = !!(game.keys['ArrowLeft'] || game.keys['a'] || game.keys['A'])
         const actionRight = !!(game.keys['ArrowRight'] || game.keys['d'] || game.keys['D'])
@@ -232,6 +244,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
           action_right: actionRight,
           action_jump: actionJump,
           action_sprint: actionSprint,
+          reward: reward,  // RL-style reward
           frame_number: frameNumberRef.current,
           difficulty: difficulty,
           timestamp: new Date().toISOString()
@@ -729,6 +742,47 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       goal_x: map.goal.x - player.x,
       goal_y: map.goal.y - player.y
     }
+  }
+
+  // Helper function to calculate RL-style reward (matches backend RL environment)
+  const calculateReward = (prevState, currentState, game) => {
+    const { player, map } = game
+    let reward = 0.0
+
+    // RL reward weights (matches environment.py)
+    const REWARD_WEIGHTS = {
+      progress: 0.1,
+      coin: 10.0,
+      goal: 1000.0,
+      death: -100.0,
+      time: -0.01
+    }
+
+    // Progress reward (encourage moving right)
+    if (prevState) {
+      const distanceDelta = currentState.player_x - prevState.player_x
+      reward += distanceDelta * REWARD_WEIGHTS.progress
+    }
+
+    // Time penalty (encourage efficiency)
+    reward += REWARD_WEIGHTS.time
+
+    // Coin collection (check if score increased)
+    if (prevState && player.score > (prevState.player_score || 0)) {
+      reward += REWARD_WEIGHTS.coin
+    }
+
+    // Goal reached (big reward)
+    if (player.checkGoalReached(map.goal)) {
+      reward += REWARD_WEIGHTS.goal
+    }
+
+    // Death penalty
+    if (!player.isAlive) {
+      reward += REWARD_WEIGHTS.death
+    }
+
+    return reward
   }
 
   // Helper function to send training data batch to backend

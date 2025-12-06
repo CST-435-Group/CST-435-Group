@@ -9,7 +9,7 @@ function TrainingControls({ isTraining, onStart, onStop, status }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Training mode selection
-  const [trainingMode, setTrainingMode] = useState('behavioral_cloning')
+  const [trainingMode, setTrainingMode] = useState('hybrid')
 
   // RL parameters
   const [timesteps, setTimesteps] = useState(1000000)
@@ -39,6 +39,16 @@ function TrainingControls({ isTraining, onStart, onStop, status }) {
         batch_size: batchSize,
         learning_rate: learningRate,
         val_split: valSplit
+      }
+      onStart(params)
+    } else if (trainingMode === 'hybrid') {
+      // Hybrid training parameters (BC + RL)
+      const params = {
+        training_mode: 'hybrid',
+        bc_epochs: epochs,  // Use epochs setting for BC phase
+        rl_timesteps: timesteps,  // Use timesteps setting for RL phase
+        batch_size: batchSize,
+        learning_rate: learningRate
       }
       onStart(params)
     } else {
@@ -89,21 +99,106 @@ function TrainingControls({ isTraining, onStart, onStop, status }) {
             disabled={isTraining}
             className="training-mode-select"
           >
+            <option value="hybrid">
+              Hybrid (BC Pretraining + RL Fine-tuning) [RECOMMENDED]
+            </option>
             <option value="behavioral_cloning">
-              Behavioral Cloning (Learn from Human Gameplay)
+              Behavioral Cloning (Learn from Human Gameplay Only)
             </option>
             <option value="reinforcement_learning">
-              Reinforcement Learning (Self-Play with PPO)
+              Reinforcement Learning (Self-Play with PPO Only)
             </option>
           </select>
           <div className="mode-description">
-            {trainingMode === 'behavioral_cloning' ? (
+            {trainingMode === 'hybrid' ? (
+              <p>🚀 Best of both worlds! Starts with human demonstrations (BC), then improves with self-play (RL). Recommended for best results.</p>
+            ) : trainingMode === 'behavioral_cloning' ? (
               <p>🎮 Trains AI to mimic human players using collected gameplay data. Fast and sample-efficient.</p>
             ) : (
               <p>🤖 Trains AI through trial and error in the environment. Requires long training times.</p>
             )}
           </div>
         </div>
+
+        {/* Hybrid Training Controls */}
+        {trainingMode === 'hybrid' && (
+          <>
+            <div className="control-group">
+              <label htmlFor="bcEpochs">
+                BC Pretraining Epochs
+                <span className="control-info">Phase 1: Learn from human demonstrations</span>
+              </label>
+              <div className="input-with-presets">
+                <input
+                  type="number"
+                  id="bcEpochs"
+                  value={epochs}
+                  onChange={(e) => setEpochs(Number(e.target.value))}
+                  min="10"
+                  max="200"
+                  step="10"
+                  disabled={isTraining}
+                />
+                <div className="preset-buttons">
+                  <button onClick={() => setEpochs(20)} disabled={isTraining}>20</button>
+                  <button onClick={() => setEpochs(50)} disabled={isTraining}>50</button>
+                  <button onClick={() => setEpochs(100)} disabled={isTraining}>100</button>
+                </div>
+              </div>
+              <div className="control-estimate">
+                BC phase: ~{(epochs / 10).toFixed(1)} minutes
+              </div>
+            </div>
+
+            <div className="control-group">
+              <label htmlFor="rlTimesteps">
+                RL Fine-tuning Timesteps
+                <span className="control-info">Phase 2: Improve with self-play</span>
+              </label>
+              <div className="input-with-presets">
+                <input
+                  type="number"
+                  id="rlTimesteps"
+                  value={timesteps}
+                  onChange={(e) => setTimesteps(Number(e.target.value))}
+                  min="100000"
+                  max="2000000"
+                  step="50000"
+                  disabled={isTraining}
+                />
+                <div className="preset-buttons">
+                  <button onClick={() => setTimesteps(250000)} disabled={isTraining}>250K</button>
+                  <button onClick={() => setTimesteps(500000)} disabled={isTraining}>500K</button>
+                  <button onClick={() => setTimesteps(1000000)} disabled={isTraining}>1M</button>
+                </div>
+              </div>
+              <div className="control-estimate">
+                RL phase: ~{(timesteps / 50000).toFixed(1)} hours
+              </div>
+            </div>
+
+            <div className="control-group">
+              <label htmlFor="hybridBatchSize">
+                Batch Size
+                <span className="control-info">For BC pretraining phase</span>
+              </label>
+              <input
+                type="number"
+                id="hybridBatchSize"
+                value={batchSize}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+                min="32"
+                max="512"
+                step="32"
+                disabled={isTraining}
+              />
+            </div>
+
+            <div className="control-estimate" style={{marginTop: '10px', fontWeight: 'bold'}}>
+              Total estimated time: ~{((epochs / 10) + (timesteps / 50000)).toFixed(1)} hours
+            </div>
+          </>
+        )}
 
         {/* Behavioral Cloning Controls */}
         {trainingMode === 'behavioral_cloning' && (

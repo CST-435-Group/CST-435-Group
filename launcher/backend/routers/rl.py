@@ -125,6 +125,9 @@ class TrainingDataPoint(BaseModel):
     action_jump: bool
     action_sprint: bool
 
+    # RL-style reward for this transition (optional, for hybrid training)
+    reward: Optional[float] = None  # Immediate reward for this state-action transition
+
     # Metadata
     frame_number: int
     difficulty: str
@@ -473,18 +476,22 @@ def start_training(
     epochs: int = 100,
     batch_size: int = 256,
     learning_rate: float = 0.001,
-    val_split: float = 0.2
+    val_split: float = 0.2,
+    bc_epochs: int = 50,
+    rl_timesteps: int = 500000
 ):
     """
     Start agent training
 
     Args:
-        training_mode: "reinforcement_learning" (PPO self-play) or "behavioral_cloning" (learn from human data)
+        training_mode: "reinforcement_learning", "behavioral_cloning", or "hybrid" (BC + RL)
         timesteps: Number of timesteps for RL training
         epochs: Number of epochs for BC training
         batch_size: Batch size for BC training
         learning_rate: Learning rate for BC training
         val_split: Validation split ratio for BC training
+        bc_epochs: Number of BC epochs for hybrid training
+        rl_timesteps: Number of RL timesteps for hybrid training
     """
     global training_process, training_pid
 
@@ -496,7 +503,32 @@ def start_training(
         raise HTTPException(status_code=500, detail="RL backend path not found")
 
     # Select training script based on mode
-    if training_mode == "behavioral_cloning":
+    if training_mode == "hybrid":
+        train_script = RL_BACKEND_PATH / "training" / "train_hybrid.py"
+        if not train_script.exists():
+            raise HTTPException(status_code=500, detail="Hybrid training script not found")
+
+        # Check if training data exists (needed for BC phase)
+        training_data_dir = Path(__file__).parent.parent / "data" / "training_data"
+        if not training_data_dir.exists() or not any(training_data_dir.rglob("*.json")):
+            raise HTTPException(
+                status_code=400,
+                detail="No training data found. Hybrid training requires human gameplay data for BC phase."
+            )
+
+        # Build command for hybrid training
+        cmd_args = [
+            sys.executable, str(train_script),
+            "--bc-epochs", str(bc_epochs),
+            "--rl-timesteps", str(rl_timesteps),
+            "--batch-size", str(batch_size),
+            "--learning-rate", str(learning_rate)
+        ]
+
+        message = f"Hybrid training started: {bc_epochs} BC epochs + {rl_timesteps} RL timesteps"
+        estimated_time = (bc_epochs / 10) + (rl_timesteps / 50000)  # BC time + RL time
+
+    elif training_mode == "behavioral_cloning":
         train_script = RL_BACKEND_PATH / "training" / "train_behavioral_cloning.py"
         if not train_script.exists():
             raise HTTPException(status_code=500, detail="Behavioral cloning training script not found")
