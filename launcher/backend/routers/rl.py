@@ -1934,8 +1934,13 @@ def clear_scores(request: Request, auth: AdminAuth = None):
     """
     client_ip = get_client_ip(request)
 
-    # Admin password check (you should change this to a secure password!)
-    ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD", "admin123_CHANGE_ME")
+    # Admin password check - MUST be set in environment variables
+    ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD")
+    if not ADMIN_PASSWORD:
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: LEADERBOARD_ADMIN_PASSWORD not set"
+        )
 
     if not auth or not auth.admin_password or auth.admin_password != ADMIN_PASSWORD:
         # Log unauthorized attempt
@@ -1986,7 +1991,12 @@ def delete_score(
     client_ip = get_client_ip(request)
 
     # Check admin password first (allows admin to delete any score)
-    ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD", "admin123_CHANGE_ME")
+    ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD")
+    if not ADMIN_PASSWORD:
+        raise HTTPException(
+            status_code=500,
+            detail="Server misconfiguration: LEADERBOARD_ADMIN_PASSWORD not set"
+        )
     is_admin = auth and auth.admin_password and auth.admin_password == ADMIN_PASSWORD
 
     # If not admin, check if user is authenticated and deleting their own score
