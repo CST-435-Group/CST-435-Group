@@ -552,6 +552,11 @@ def get_training_status():
                 status = json.load(f)
                 status['process_alive'] = is_process_alive
                 status['pid'] = training_pid
+
+                # Safety: ensure best_reward is JSON-safe (convert None to 0.0 for display)
+                if status.get('best_reward') is None:
+                    status['best_reward'] = 0.0
+
                 return status
         except Exception as e:
             return {
@@ -790,6 +795,10 @@ async def stream_training_status():
                                 status['process_alive'] = is_process_alive
                                 status['pid'] = training_pid
 
+                                # Safety: ensure best_reward is JSON-safe (convert None to 0.0 for display)
+                                if status.get('best_reward') is None:
+                                    status['best_reward'] = 0.0
+
                                 # Only send if status changed
                                 if status != last_status:
                                     yield f"data: {json.dumps(status)}\n\n"
@@ -988,7 +997,7 @@ def get_available_models():
         available_models.append({
             "id": "main_onnx",
             "name": "Main Model (ONNX)",
-            "path": str(main_onnx),
+            "path": "/api/rl/models/onnx/main/model.onnx",
             "description": "Primary trained model (ONNX format)",
             "type": "main",
             "format": "onnx"
@@ -1362,6 +1371,24 @@ def get_gpu_info():
         }
 
 
+@router.get("/models/onnx/main/model.onnx", summary="Get Main ONNX Model File")
+def get_main_onnx_model():
+    """Serve main ONNX model file for browser loading"""
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    model_path = RL_BACKEND_PATH / "models" / "exported_onnx" / "model.onnx"
+
+    if not model_path.exists():
+        raise HTTPException(status_code=404, detail="Main ONNX model not found")
+
+    return FileResponse(
+        model_path,
+        media_type="application/octet-stream",
+        filename="main_model.onnx"
+    )
+
+
 @router.get("/models/onnx/{episode}/model.onnx", summary="Get ONNX Model File")
 def get_onnx_model(episode: int):
     """Serve ONNX model file for browser loading"""
@@ -1377,6 +1404,42 @@ def get_onnx_model(episode: int):
         model_path,
         media_type="application/octet-stream",
         filename=f"episode_{episode}_model.onnx"
+    )
+
+
+@router.get("/models/onnx/main/model.onnx.data", summary="Get Main ONNX Model Data File")
+def get_main_onnx_model_data():
+    """Serve main ONNX model data file (external weights)"""
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    data_path = RL_BACKEND_PATH / "models" / "exported_onnx" / "model.onnx.data"
+
+    if not data_path.exists():
+        raise HTTPException(status_code=404, detail="Main ONNX model data file not found")
+
+    return FileResponse(
+        data_path,
+        media_type="application/octet-stream",
+        filename="main_model.onnx.data"
+    )
+
+
+@router.get("/models/onnx/{episode}/model.onnx.data", summary="Get ONNX Model Data File")
+def get_onnx_model_data(episode: int):
+    """Serve ONNX model data file (external weights)"""
+    if not RL_BACKEND_PATH:
+        raise HTTPException(status_code=500, detail="RL backend path not found")
+
+    data_path = RL_BACKEND_PATH / "models" / f"episode_{episode}_onnx" / "model.onnx.data"
+
+    if not data_path.exists():
+        raise HTTPException(status_code=404, detail=f"ONNX model data file for episode {episode} not found")
+
+    return FileResponse(
+        data_path,
+        media_type="application/octet-stream",
+        filename=f"episode_{episode}_model.onnx.data"
     )
 
 

@@ -32,7 +32,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
   const trainingDataRef = useRef([])
   const sessionIdRef = useRef(`${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
   const frameNumberRef = useRef(0)
-  const [aiStatus, setAiStatus] = useState('loading') // loading, ready, error, disabled
+  const [aiStatus, setAiStatus] = useState(enableAI ? 'loading' : 'disabled') // loading, ready, error, disabled
+  const aiStatusRef = useRef(enableAI ? 'loading' : 'disabled') // Ref for game loop access
   const [loadingProgress, setLoadingProgress] = useState(0)
   const [loadingMessage, setLoadingMessage] = useState('')
   const [gameTime, setGameTime] = useState(0)
@@ -40,13 +41,21 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
   // Determine which model to use - episode model or default trained model
   const modelPath = episodeModelPath || '/models/rl/tfjs_model/model.json'
 
+  // Helper to update AI status (both state and ref)
+  const updateAiStatus = (status) => {
+    console.log('[AI-STATUS] Updating status:', aiStatusRef.current, '→', status)
+    setAiStatus(status)
+    aiStatusRef.current = status
+  }
+
   // Debug logging
-  console.log('[GameCanvas] Component rendered with props:', {
-    enableAI,
-    episodeModelPath,
-    playingEpisode,
-    modelPath
-  })
+  console.log('═══════════════════════════════════════════════')
+  console.log('[GameCanvas] Component rendered with props:')
+  console.log('  enableAI:', enableAI)
+  console.log('  episodeModelPath:', episodeModelPath)
+  console.log('  playingEpisode:', playingEpisode)
+  console.log('  Final modelPath:', modelPath)
+  console.log('═══════════════════════════════════════════════')
 
   // Game objects
   const gameRef = useRef({
@@ -59,6 +68,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     lastTime: 0,
     animationFrame: null,
     aiActionCooldown: 0,
+    aiLastAction: 0, // Cache last AI action to avoid async in game loop
+    aiPredicting: false, // Track if AI prediction is in progress
     startTime: 0,
     elapsedTime: 0
   })
@@ -70,52 +81,78 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     const ctx = canvas.getContext('2d')
     const game = gameRef.current
 
+    // Store canvas in game object for AI player rendering
+    game.canvas = canvas
+
     // Initialize game
     const mapGen = new MapGenerator(1920, 1080, 32)
     game.map = mapGen.generateMap(null, difficulty) // Pass difficulty to map generator
+
+    // Create player at spawn position (map generator provides correct coordinates)
     game.player = new Player(game.map.spawn.x, game.map.spawn.y)
+    console.log('[GAME] Player spawned at:', game.map.spawn.x, game.map.spawn.y)
+
     game.cameraX = 0
     game.jumpKeyWasPressed = false // Track if jump key was already pressed
 
     // Initialize AI if enabled
     if (enableAI) {
+      console.log('\n🤖 ═══════════ AI INITIALIZATION STARTED ═══════════')
+      console.log('[AI-INIT] Creating AI player...')
       game.aiPlayer = new Player(game.map.spawn.x, game.map.spawn.y - 50) // Start slightly above
+      console.log('[AI-INIT] AI player created at position:', game.map.spawn.x, game.map.spawn.y - 50)
+
+      console.log('[AI-INIT] Creating AI agent instance...')
       game.aiAgent = new AIPlayer()
+      console.log('[AI-INIT] AI agent instance created')
+
       game.aiActionCooldown = 0
 
       // Load AI model with progress tracking
-      setAiStatus('loading')
+      updateAiStatus('loading')
       setLoadingProgress(0)
       setLoadingMessage('Initializing AI...')
 
-      console.log('[GAME] Starting AI model load...')
-      console.log('[GAME] Model path:', modelPath)
+      console.log('[AI-INIT] Starting model load...')
+      console.log('[AI-INIT] Model path:', modelPath)
+      console.log('[AI-INIT] Model format detection:', modelPath.endsWith('.onnx') ? 'ONNX' : 'TensorFlow.js')
 
       // Progress callback
       const onProgress = (progress, message) => {
-        console.log(`[GAME] Loading progress: ${progress}% - ${message}`)
+        console.log(`[AI-LOADING] ${progress}% - ${message}`)
         setLoadingProgress(progress)
         setLoadingMessage(message)
       }
 
+      console.log('[AI-INIT] Calling loadModel()...')
       game.aiAgent.loadModel(modelPath, onProgress)
         .then(success => {
+          console.log('[AI-LOADING] loadModel() promise resolved, success:', success)
           if (success) {
-            setAiStatus('ready')
-            console.log('[GAME] AI opponent loaded and ready!')
+            console.log('[AI-LOADING] Setting aiStatus to "ready"')
+            updateAiStatus('ready')
+            console.log('✅ [AI-READY] AI opponent loaded and ready!')
+            console.log('[AI-READY] Model info:', game.aiAgent.getModelInfo())
           } else {
-            setAiStatus('error')
+            updateAiStatus('error')
             setLoadingMessage('Failed to load AI model')
-            console.error('[GAME] Failed to load AI model')
+            console.error('❌ [AI-ERROR] Failed to load AI model (success=false)')
           }
         })
         .catch(err => {
-          setAiStatus('error')
+          updateAiStatus('error')
           setLoadingMessage(`Error: ${err.message}`)
-          console.error('[GAME] AI loading error:', err)
+          console.error('❌ [AI-ERROR] AI loading exception:', err)
+          console.error('[AI-ERROR] Error name:', err.name)
+          console.error('[AI-ERROR] Error message:', err.message)
+          console.error('[AI-ERROR] Error stack:', err.stack)
         })
+
+      console.log('[AI-INIT] Model loading initiated (promise pending)')
+      console.log('🤖 ════════════════════════════════════════════════\n')
     } else {
-      setAiStatus('disabled')
+      console.log('[AI-INIT] AI disabled by user, skipping initialization')
+      updateAiStatus('disabled')
     }
 
     // Clear all keys helper
@@ -195,8 +232,21 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
 
     // Game loop
     const gameLoop = (timestamp) => {
-      const deltaTime = timestamp - game.lastTime
+      let deltaTime = timestamp - game.lastTime
       game.lastTime = timestamp
+
+      // Clamp deltaTime to prevent huge spikes on first frame or lag
+      // Max 33ms (2 frames at 60fps) to prevent physics from breaking
+      if (deltaTime > 33) {
+        console.warn('[GAME] Large deltaTime detected:', deltaTime, 'ms - clamping to 33ms')
+        deltaTime = 33
+      }
+
+      // Skip first frame entirely if deltaTime is 0 (initialization frame)
+      if (deltaTime === 0) {
+        game.animationFrame = requestAnimationFrame(gameLoop)
+        return
+      }
 
       // Calculate frame-rate independent delta (normalized to 60 FPS)
       // This ensures consistent speed across all devices
@@ -338,10 +388,12 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       }
     }
 
-    // Start game loop and timer
+    // Start game loop
+    console.log('[GAME] Starting game loop...')
     const now = performance.now()
     game.lastTime = now
     game.startTime = now
+    console.log('[GAME] Game loop started at:', now)
     game.animationFrame = requestAnimationFrame(gameLoop)
 
     // Cleanup
@@ -386,6 +438,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
 
     // Jump - only jump once per key press (not continuous while held)
     if (jumpPressed && !game.jumpKeyWasPressed) {
+      console.log('[JUMP] Attempting jump - isOnGround:', player.isOnGround, 'velocityY:', player.velocityY, 'y:', player.y)
       player.jump()
       game.jumpKeyWasPressed = true
     }
@@ -427,7 +480,13 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
 
     // Update AI player
     if (enableAI && game.aiPlayer && game.aiAgent && game.aiAgent.isReady()) {
-      updateAIPlayer(game, canvas)
+      updateAIPlayer(game, game.canvas)
+    } else if (enableAI && game.aiPlayer && game.aiAgent && !game.aiAgent.isReady()) {
+      // Log once when AI is not ready
+      if (!game.aiNotReadyLogged) {
+        console.log('[GAME] AI not ready yet - isLoaded:', game.aiAgent.isLoaded)
+        game.aiNotReadyLogged = true
+      }
     }
 
     // Update stats display
@@ -440,59 +499,69 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     })
   }
 
-  const updateAIPlayer = async (game, canvas) => {
+  const updateAIPlayer = (game, canvas) => {
     const { aiPlayer, aiAgent, map } = game
 
-    if (!aiPlayer.isAlive) return
+    if (!aiPlayer.isAlive) {
+      return
+    }
 
     // AI action cooldown (predict every N frames to reduce computational load)
     game.aiActionCooldown--
     if (game.aiActionCooldown <= 0) {
       game.aiActionCooldown = 3 // Predict every 3 frames
 
-      try {
-        // Get AI action prediction
-        const action = await aiAgent.predictAction(canvas, aiPlayer.x, game.cameraX)
-
-        // Apply action
-        aiPlayer.stopMovement()
-
-        switch (action) {
-          case 1: // Left
-            aiPlayer.moveLeft()
-            break
-          case 2: // Right
-            aiPlayer.moveRight()
-            break
-          case 3: // Jump (straight up)
-            aiPlayer.jump()
-            break
-          case 4: // Sprint + Right
-            aiPlayer.sprint(true)
-            aiPlayer.moveRight()
-            break
-          case 5: // Duck
-            aiPlayer.duck(true)
-            break
-          case 6: // Jump + Left
-            aiPlayer.jump()
-            aiPlayer.moveLeft()
-            break
-          case 7: // Jump + Right
-            aiPlayer.jump()
-            aiPlayer.moveRight()
-            break
-          case 8: // Sprint + Jump + Right
-            aiPlayer.sprint(true)
-            aiPlayer.jump()
-            aiPlayer.moveRight()
-            break
-          default: // Idle
-            break
-        }
-      } catch (error) {
-        console.error('[GAME] AI prediction error:', error)
+      // Start async prediction in background (non-blocking)
+      if (!game.aiPredicting) {
+        game.aiPredicting = true
+        aiAgent.predictAction(canvas, aiPlayer.x, game.cameraX)
+          .then(action => {
+            game.aiLastAction = action
+            game.aiPredicting = false
+          })
+          .catch(error => {
+            console.error('[GAME] AI prediction error:', error)
+            game.aiPredicting = false
+          })
       }
+    }
+
+    // Apply cached action (synchronous, no blocking)
+    const action = game.aiLastAction
+    aiPlayer.stopMovement()
+
+    switch (action) {
+      case 1: // Left
+        aiPlayer.moveLeft()
+        break
+      case 2: // Right
+        aiPlayer.moveRight()
+        break
+      case 3: // Jump (straight up)
+        aiPlayer.jump()
+        break
+      case 4: // Sprint + Right
+        aiPlayer.sprint(true)
+        aiPlayer.moveRight()
+        break
+      case 5: // Duck
+        aiPlayer.duck(true)
+        break
+      case 6: // Jump + Left
+        aiPlayer.jump()
+        aiPlayer.moveLeft()
+        break
+      case 7: // Jump + Right
+        aiPlayer.jump()
+        aiPlayer.moveRight()
+        break
+      case 8: // Sprint + Jump + Right
+        aiPlayer.sprint(true)
+        aiPlayer.jump()
+        aiPlayer.moveRight()
+        break
+      default: // Idle
+        break
     }
 
     // Update AI player physics
@@ -642,14 +711,21 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
         ctx.fillText(`Episode ${playingEpisode}`, canvas.width - 290, 108)
       }
 
-      // AI status indicator
-      if (aiStatus === 'loading') {
+      // AI status indicator (use ref for game loop access)
+      const currentAiStatus = aiStatusRef.current
+      if (currentAiStatus === 'loading') {
         ctx.fillStyle = 'rgba(255, 193, 7, 0.9)'
         ctx.fillRect(canvas.width - 310, 120, 300, 40)
         ctx.fillStyle = '#000'
         ctx.font = '14px Arial'
         ctx.fillText('AI Loading...', canvas.width - 290, 145)
-      } else if (aiStatus === 'error') {
+      } else if (currentAiStatus === 'ready') {
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.9)' // Green
+        ctx.fillRect(canvas.width - 310, 120, 300, 40)
+        ctx.fillStyle = '#FFF'
+        ctx.font = '14px Arial'
+        ctx.fillText('🤖 AI Ready', canvas.width - 290, 145)
+      } else if (currentAiStatus === 'error') {
         ctx.fillStyle = 'rgba(244, 67, 54, 0.9)'
         ctx.fillRect(canvas.width - 310, 120, 300, 40)
         ctx.fillStyle = '#FFF'
@@ -668,14 +744,15 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       ctx.fillText(`Time: ${formatTime(game.elapsedTime || 0)}`, 20, 95)
     }
 
-    // Controls hint
+    // Controls hint - Bottom left instead of top right
+    const controlsY = canvas.height - 95 // 95px from bottom
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-    ctx.fillRect(canvas.width - 310, 10, 300, 80)
+    ctx.fillRect(10, controlsY, 300, 85)
     ctx.fillStyle = '#FFFFFF'
     ctx.font = '16px Arial'
-    ctx.fillText('← → : Move', canvas.width - 290, 35)
-    ctx.fillText('Space: Jump', canvas.width - 290, 55)
-    ctx.fillText('Shift: Sprint', canvas.width - 290, 75)
+    ctx.fillText('← → : Move', 20, controlsY + 25)
+    ctx.fillText('Space: Jump', 20, controlsY + 50)
+    ctx.fillText('Shift: Sprint', 20, controlsY + 75)
   }
 
   const handlePlayAgain = () => {

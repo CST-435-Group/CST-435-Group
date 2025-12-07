@@ -9,7 +9,7 @@ function TrainingControls({ isTraining, onStart, onStop, status }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Training mode selection
-  const [trainingMode, setTrainingMode] = useState('hybrid')
+  const [trainingMode, setTrainingMode] = useState('reinforcement_learning')
 
   // RL parameters
   const [timesteps, setTimesteps] = useState(1000000)
@@ -99,14 +99,14 @@ function TrainingControls({ isTraining, onStart, onStop, status }) {
             disabled={isTraining}
             className="training-mode-select"
           >
+            <option value="reinforcement_learning">
+              Reinforcement Learning (Self-Play with PPO) [DEFAULT]
+            </option>
             <option value="hybrid">
-              Hybrid (BC Pretraining + RL Fine-tuning) [RECOMMENDED]
+              Hybrid (BC Pretraining + RL Fine-tuning)
             </option>
             <option value="behavioral_cloning">
               Behavioral Cloning (Learn from Human Gameplay Only)
-            </option>
-            <option value="reinforcement_learning">
-              Reinforcement Learning (Self-Play with PPO Only)
             </option>
           </select>
           <div className="mode-description">

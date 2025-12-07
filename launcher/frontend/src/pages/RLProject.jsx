@@ -145,14 +145,21 @@ function RLProject() {
 
     // User is authenticated, start game
     setDifficulty(selectedDifficulty)
-    console.log('[RLProject] Starting game:', {
-      enableAI,
-      selectedModel,
-      episodeModelPath,
-      playingEpisode,
-      username: currentUser.username,
-      difficulty: selectedDifficulty
-    })
+
+    const modelPathToPass = episodeModelPath || selectedModel?.path
+
+    console.log('\n🎮 ═══════════ GAME START ═══════════')
+    console.log('[RLProject] Starting game with configuration:')
+    console.log('  enableAI:', enableAI)
+    console.log('  selectedModel:', selectedModel)
+    console.log('  selectedModel.path:', selectedModel?.path)
+    console.log('  episodeModelPath:', episodeModelPath)
+    console.log('  Final model path to pass:', modelPathToPass)
+    console.log('  playingEpisode:', playingEpisode)
+    console.log('  username:', currentUser.username)
+    console.log('  difficulty:', selectedDifficulty)
+    console.log('🎮 ════════════════════════════════════\n')
+
     setGameStarted(true)
   }
 
@@ -839,6 +846,11 @@ function RLProject() {
                       value={selectedModel?.id || ''}
                       onChange={(e) => {
                         const model = availableModels.find(m => m.id === e.target.value)
+                        console.log('🎯 [MODEL-SELECT] User selected model:', model)
+                        console.log('[MODEL-SELECT] Model ID:', model?.id)
+                        console.log('[MODEL-SELECT] Model name:', model?.name)
+                        console.log('[MODEL-SELECT] Model path:', model?.path)
+                        console.log('[MODEL-SELECT] Model format:', model?.format)
                         setSelectedModel(model)
                       }}
                     >
