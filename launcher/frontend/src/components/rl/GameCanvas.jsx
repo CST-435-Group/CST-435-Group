@@ -29,7 +29,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
   const [stats, setStats] = useState({ score: 0, distance: 0, aiScore: 0, aiDistance: 0, time: 0 })
 
   // Training data collection
-  const trainingDataRef = useRef([])
+  const trainingDataRef = useRef([])  // Batch for periodic sending
+  const allGameplayDataRef = useRef([])  // ALL data for score validation
   const sessionIdRef = useRef(`${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
   const frameNumberRef = useRef(0)
   const [aiStatus, setAiStatus] = useState(enableAI ? 'loading' : 'disabled') // loading, ready, error, disabled
@@ -267,8 +268,9 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       // Render
       renderGame(ctx, game)
 
-      // Collect training data (if enabled and player is alive)
-      if (COLLECT_TRAINING_DATA && game.player.isAlive && !enableAI) {
+      // Collect gameplay data for score validation (ALWAYS when player is alive)
+      // Also collect for AI training when not playing against AI
+      if (game.player.isAlive) {
         frameNumberRef.current++
 
         // Extract state features
@@ -292,7 +294,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
         const actionJump = !!(game.keys['ArrowUp'] || game.keys[' '] || game.keys['w'] || game.keys['W'])
         const actionSprint = !!(game.keys['Shift'])
 
-        // Create training data point
+        // Create gameplay data point
         const dataPoint = {
           ...stateFeatures,
           action_left: actionLeft,
@@ -305,14 +307,20 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
           timestamp: new Date().toISOString()
         }
 
-        // Add to batch
-        trainingDataRef.current.push(dataPoint)
+        // ALWAYS add to gameplay recording for score validation
+        allGameplayDataRef.current.push(dataPoint)
 
-        // Send batch if it reaches the batch size
-        if (trainingDataRef.current.length >= TRAINING_DATA_BATCH_SIZE) {
-          const batchToSend = [...trainingDataRef.current]
-          trainingDataRef.current = [] // Clear the batch
-          sendTrainingDataBatch(batchToSend)
+        // Only send to training endpoint when NOT playing against AI
+        if (COLLECT_TRAINING_DATA && !enableAI) {
+          // Add to batch for periodic sending to training endpoint
+          trainingDataRef.current.push(dataPoint)
+
+          // Send batch if it reaches the batch size
+          if (trainingDataRef.current.length >= TRAINING_DATA_BATCH_SIZE) {
+            const batchToSend = [...trainingDataRef.current]
+            trainingDataRef.current = [] // Clear the batch
+            sendTrainingDataBatch(batchToSend)
+          }
         }
       }
 
@@ -347,13 +355,20 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
 
         // Notify parent component with completion data (raw distance for backend storage)
         if (onGameComplete) {
+          // Copy gameplay data for score validation (ALWAYS collected)
+          const gameplayRecording = [...allGameplayDataRef.current]
+
           onGameComplete({
             won: true,
             time: finalTime,
             score: game.player.score,
             distance: Math.floor(game.player.distance),
-            jumps: game.player.jumpCount || 0
+            jumps: game.player.jumpCount || 0,
+            trainingData: gameplayRecording  // Include full gameplay recording
           })
+
+          // Clear gameplay recording for next game
+          allGameplayDataRef.current = []
         }
       } else if (humanLost || (enableAI && aiWon)) {
         const finalTime = game.elapsedTime
@@ -380,13 +395,20 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
 
         // Notify parent component (raw distance for backend storage)
         if (onGameComplete) {
+          // Copy gameplay data (ALWAYS collected, even for losses)
+          const gameplayRecording = [...allGameplayDataRef.current]
+
           onGameComplete({
             won: false,
             time: finalTime,
             score: game.player.score,
             distance: Math.floor(game.player.distance),
-            jumps: game.player.jumpCount || 0
+            jumps: game.player.jumpCount || 0,
+            trainingData: gameplayRecording  // Include full gameplay recording
           })
+
+          // Clear gameplay recording for next game
+          allGameplayDataRef.current = []
         }
       } else {
         game.animationFrame = requestAnimationFrame(gameLoop)
