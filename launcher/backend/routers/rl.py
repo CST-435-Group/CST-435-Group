@@ -1003,6 +1003,18 @@ def get_available_models():
             "format": "onnx"
         })
 
+    # Check for Behavioral Cloning model (ONNX)
+    bc_onnx = LAUNCHER_BACKEND_PATH / "models" / "rl" / "bc_onnx" / "model.onnx"
+    if bc_onnx.exists():
+        available_models.append({
+            "id": "bc_onnx",
+            "name": "Behavioral Cloning (ONNX)",
+            "path": "/models/rl/bc_onnx/model.onnx",
+            "description": "Trained from human gameplay (97.1% accuracy)",
+            "type": "main",
+            "format": "onnx"
+        })
+
     # Check for episode-specific models
     if models_dir.exists():
         # TensorFlow.js episode models

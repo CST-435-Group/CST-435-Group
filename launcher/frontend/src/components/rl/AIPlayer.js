@@ -13,8 +13,13 @@ class AIPlayer {
     this.isLoaded = false
     this.isLoading = false // Prevent concurrent loads
     this.modelFormat = null // 'tfjs' or 'onnx'
+    this.modelType = null // 'cnn' or 'bc' (behavioral cloning)
     this.inputShape = [84, 84, 3] // Height, Width, Channels (for TensorFlow.js)
     this.numActions = 6 // Default for TensorFlow.js models
+
+    // BC model normalization parameters (from training)
+    this.bcNormalizeMean = null
+    this.bcNormalizeStd = null
   }
 
   /**
@@ -150,8 +155,45 @@ class AIPlayer {
       if (onProgress) onProgress(70, 'Model loaded, initializing...')
 
       this.modelFormat = 'onnx'
-      this.inputShape = [3, 84, 84] // CHW format for ONNX
-      this.numActions = 9 // ONNX models from new training have 9 actions
+
+      // Detect model type based on path (path-based detection to avoid accessing private properties)
+      // BC models are stored in paths containing "bc" or "behavioral"
+      const isBCModel = modelPath.toLowerCase().includes('bc') || modelPath.toLowerCase().includes('behavioral')
+
+      if (isBCModel) {
+        // BC model: [batch_size, 16 features]
+        this.modelType = 'bc'
+        this.inputShape = [16] // Feature vector
+        this.numActions = 4 // BC models: left, right, jump, sprint
+
+        // Set BC normalization parameters (from export_bc_to_onnx.py output)
+        this.bcNormalizeMean = new Float32Array([
+          3.00547363e+03, 3.79342102e+02, 6.06058455e+00, 7.63759851e-01,
+          2.27081388e-01, 5.05694103e+00, 9.04971848e+01, 5.16902395e-02,
+          1.05831474e+02, 5.87535133e+01, 6.02987185e-02, 1.16671135e+02,
+          8.86899662e+00, 8.26654688e+03, -1.33909332e+02, 3.42415839e-01
+        ])
+        this.bcNormalizeStd = new Float32Array([
+          2.7070098e+03, 1.9233147e+02, 2.9470716e+00, 8.1185551e+00,
+          4.2121437e-01, 9.1525330e+01, 5.8899105e+01, 2.2008422e-01,
+          6.7948883e+01, 1.4398834e+02, 2.3593968e-01, 2.1963815e+02,
+          9.7333290e+01, 3.6122949e+03, 2.2437267e+02, 6.7818624e-01
+        ])
+
+        console.log('[AI] Model type: Behavioral Cloning (BC) - Feature-based')
+        console.log('[AI] Input: 16 features (player state + environment)')
+        console.log('[AI] Output: 4 actions (left, right, jump, sprint)')
+      } else {
+        // CNN model: [batch_size, 3, 84, 84]
+        this.modelType = 'cnn'
+        this.inputShape = [3, 84, 84] // CHW format
+        this.numActions = 9 // CNN models from PPO training
+
+        console.log('[AI] Model type: CNN (Convolutional) - Image-based')
+        console.log('[AI] Input: RGB images 84x84')
+        console.log('[AI] Output: 9 actions')
+      }
+
       this.isLoaded = true
 
       console.log('[AI] ONNX model loaded successfully')
@@ -194,8 +236,16 @@ class AIPlayer {
 
     if (this.modelFormat === 'onnx') {
       // ONNX warm-up
-      const dummyInput = new Float32Array(1 * 3 * 84 * 84).fill(0)
-      const tensor = new ort.Tensor('float32', dummyInput, [1, 3, 84, 84])
+      let dummyInput, tensor
+      if (this.modelType === 'bc') {
+        // BC model: 16 features
+        dummyInput = new Float32Array(1 * 16).fill(0)
+        tensor = new ort.Tensor('float32', dummyInput, [1, 16])
+      } else {
+        // CNN model: 3x84x84 image
+        dummyInput = new Float32Array(1 * 3 * 84 * 84).fill(0)
+        tensor = new ort.Tensor('float32', dummyInput, [1, 3, 84, 84])
+      }
       const feeds = { [this.session.inputNames[0]]: tensor }
       await this.session.run(feeds)
     } else {
@@ -334,13 +384,109 @@ class AIPlayer {
   }
 
   /**
+   * Extract 16 game features for BC model from game object
+   * @param {object} game - Game state object
+   * @param {object} aiPlayer - AI player object
+   * @returns {Float32Array} 16 features
+   */
+  extractGameFeatures(game, aiPlayer) {
+    // Extract features similar to training data collection
+    const features = new Float32Array(16)
+
+    features[0] = aiPlayer.x || 0
+    features[1] = aiPlayer.y || 0
+    features[2] = aiPlayer.velocityX || 0
+    features[3] = aiPlayer.velocityY || 0
+    features[4] = aiPlayer.isOnGround ? 1.0 : 0.0
+
+    // Platform below (closest platform below player)
+    let platformBelow = null
+    let minDistBelow = Infinity
+    game.map.platforms.forEach(p => {
+      if (p.y > aiPlayer.y && Math.abs(p.x - aiPlayer.x) < 200) {
+        const dist = p.y - aiPlayer.y
+        if (dist < minDistBelow) {
+          minDistBelow = dist
+          platformBelow = p
+        }
+      }
+    })
+    features[5] = platformBelow ? platformBelow.x : 0
+    features[6] = platformBelow ? platformBelow.y : 0
+    features[7] = platformBelow && platformBelow.type === 'ice' ? 1.0 : 0.0
+
+    // Platform ahead (next platform in direction of goal)
+    let platformAhead = null
+    let minDistAhead = Infinity
+    const goalDirection = game.goal.x > aiPlayer.x ? 1 : -1
+    game.map.platforms.forEach(p => {
+      const inDirection = goalDirection > 0 ? p.x > aiPlayer.x : p.x < aiPlayer.x
+      if (inDirection) {
+        const dist = Math.abs(p.x - aiPlayer.x) + Math.abs(p.y - aiPlayer.y)
+        if (dist < minDistAhead) {
+          minDistAhead = dist
+          platformAhead = p
+        }
+      }
+    })
+    features[8] = platformAhead ? platformAhead.x : 0
+    features[9] = platformAhead ? platformAhead.y : 0
+    features[10] = platformAhead && platformAhead.type === 'ice' ? 1.0 : 0.0
+
+    // Enemy position (closest enemy or 0)
+    let closestEnemy = null
+    let minEnemyDist = Infinity
+    if (game.enemies && game.enemies.length > 0) {
+      game.enemies.forEach(e => {
+        if (e.isAlive) {
+          const dist = Math.abs(e.x - aiPlayer.x) + Math.abs(e.y - aiPlayer.y)
+          if (dist < minEnemyDist) {
+            minEnemyDist = dist
+            closestEnemy = e
+          }
+        }
+      })
+    }
+    features[11] = closestEnemy ? closestEnemy.x : 0
+    features[12] = closestEnemy ? closestEnemy.y : 0
+
+    // Goal position
+    features[13] = game.goal ? game.goal.x : 0
+    features[14] = game.goal ? game.goal.y : 0
+
+    // Difficulty (encode as number: easy=0, medium=1, hard=2)
+    const difficultyMap = { 'easy': 0.0, 'medium': 1.0, 'hard': 2.0 }
+    features[15] = difficultyMap[game.difficulty] || 0.0
+
+    return features
+  }
+
+  /**
+   * Preprocess BC features (normalize)
+   * @param {Float32Array} features - Raw 16 features
+   * @returns {ort.Tensor} Normalized features tensor [1, 16]
+   */
+  preprocessFeaturesBC(features) {
+    const normalized = new Float32Array(16)
+
+    // Apply normalization: (x - mean) / std
+    for (let i = 0; i < 16; i++) {
+      normalized[i] = (features[i] - this.bcNormalizeMean[i]) / this.bcNormalizeStd[i]
+    }
+
+    return new ort.Tensor('float32', normalized, [1, 16])
+  }
+
+  /**
    * Predict action from current game state
    * @param {HTMLCanvasElement} canvas - Game canvas
    * @param {number} playerX - Player X position
    * @param {number} cameraX - Camera X offset
+   * @param {object} game - Full game state (required for BC models)
+   * @param {object} aiPlayer - AI player object (required for BC models)
    * @returns {Promise<number>} Action index
    */
-  async predictAction(canvas, playerX, cameraX) {
+  async predictAction(canvas, playerX, cameraX, game = null, aiPlayer = null) {
     if (!this.isLoaded) {
       console.warn('[AI] Model not loaded')
       return 0 // Default to idle
@@ -348,7 +494,7 @@ class AIPlayer {
 
     try {
       if (this.modelFormat === 'onnx') {
-        return await this.predictActionONNX(canvas, playerX, cameraX)
+        return await this.predictActionONNX(canvas, playerX, cameraX, game, aiPlayer)
       } else {
         return await this.predictActionTFJS(canvas, playerX, cameraX)
       }
@@ -408,43 +554,85 @@ class AIPlayer {
    * @param {HTMLCanvasElement} canvas - Game canvas
    * @param {number} playerX - Player X position
    * @param {number} cameraX - Camera X offset
-   * @returns {Promise<number>} Action index (0-8)
+   * @param {object} game - Full game state (for BC models)
+   * @param {object} aiPlayer - AI player object (for BC models)
+   * @returns {Promise<number>} Action index
    */
-  async predictActionONNX(canvas, playerX, cameraX) {
+  async predictActionONNX(canvas, playerX, cameraX, game = null, aiPlayer = null) {
     try {
-      // Preprocess frame
-      const inputTensor = this.preprocessFrameONNX(canvas, playerX, cameraX)
+      let inputTensor
+
+      if (this.modelType === 'bc') {
+        // BC model: Use game features
+        if (!game || !aiPlayer) {
+          console.error('[AI] BC model requires game and aiPlayer objects')
+          return 0
+        }
+        const features = this.extractGameFeatures(game, aiPlayer)
+        inputTensor = this.preprocessFeaturesBC(features)
+      } else {
+        // CNN model: Use canvas screenshot
+        inputTensor = this.preprocessFrameONNX(canvas, playerX, cameraX)
+      }
 
       // Run inference
       const feeds = { [this.session.inputNames[0]]: inputTensor }
       const results = await this.session.run(feeds)
 
-      // Get logits from output
+      // Get output
       const outputName = this.session.outputNames[0]
-      const logits = results[outputName].data
+      const output = results[outputName].data
 
-      // Apply softmax
-      const maxLogit = Math.max(...logits)
-      const expValues = Array.from(logits).map(x => Math.exp(x - maxLogit))
-      const sumExp = expValues.reduce((a, b) => a + b, 0)
-      const probs = expValues.map(x => x / sumExp)
+      // BC models output probabilities directly (sigmoid), CNN models output logits
+      let probs
+      if (this.modelType === 'bc') {
+        // BC: Output is already probabilities from sigmoid
+        // Actions are independent binary: [left, right, jump, sprint]
+        // Pick action with highest probability > 0.5
+        probs = Array.from(output)
 
-      // Get action with highest probability (greedy)
-      const action = probs.indexOf(Math.max(...probs))
+        // Find best action (highest probability above threshold)
+        let bestAction = 0  // Default: idle (no action)
+        let bestProb = 0.3  // Threshold - only act if confident
 
-      // Debug: Log probabilities occasionally
-      if (Math.random() < 0.05) { // 5% chance to log
-        console.log('[AI-PREDICT] Logits:', Array.from(logits).map(x => x.toFixed(2)))
-        console.log('[AI-PREDICT] Probs:', probs.map(x => (x * 100).toFixed(1) + '%'))
-        console.log('[AI-PREDICT] Selected action:', action, '| Top 3:',
-          probs.map((p, i) => ({action: i, prob: p}))
-            .sort((a, b) => b.prob - a.prob)
-            .slice(0, 3)
-            .map(x => `${x.action}:${(x.prob * 100).toFixed(1)}%`).join(', ')
-        )
+        for (let i = 0; i < probs.length; i++) {
+          if (probs[i] > bestProb) {
+            bestProb = probs[i]
+            bestAction = i + 1  // +1 because actions are: 0=idle, 1=left, 2=right, 3=jump, 4=sprint
+          }
+        }
+
+        // Debug: Log probabilities occasionally
+        if (Math.random() < 0.05) { // 5% chance to log
+          console.log('[AI-BC] Raw probs:', probs.map(x => (x * 100).toFixed(1) + '%'))
+          console.log('[AI-BC] Selected action:', ['idle', 'left', 'right', 'jump', 'sprint'][bestAction])
+        }
+
+        return bestAction
+      } else {
+        // CNN: Apply softmax to logits
+        const maxLogit = Math.max(...output)
+        const expValues = Array.from(output).map(x => Math.exp(x - maxLogit))
+        const sumExp = expValues.reduce((a, b) => a + b, 0)
+        probs = expValues.map(x => x / sumExp)
+
+        // Get action with highest probability (greedy)
+        const action = probs.indexOf(Math.max(...probs))
+
+        // Debug: Log probabilities occasionally
+        if (Math.random() < 0.05) { // 5% chance to log
+          console.log('[AI-CNN] Logits:', Array.from(output).map(x => x.toFixed(2)))
+          console.log('[AI-CNN] Probs:', probs.map(x => (x * 100).toFixed(1) + '%'))
+          console.log('[AI-CNN] Selected action:', action, '| Top 3:',
+            probs.map((p, i) => ({action: i, prob: p}))
+              .sort((a, b) => b.prob - a.prob)
+              .slice(0, 3)
+              .map(x => `${x.action}:${(x.prob * 100).toFixed(1)}%`).join(', ')
+          )
+        }
+
+        return action
       }
-
-      return action
     } catch (error) {
       console.error('[AI] ONNX prediction error:', error)
       return 0
