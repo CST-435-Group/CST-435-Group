@@ -74,7 +74,7 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
     }
   }
 
-  const addScore = async (playerName, time, score, distance, won, gameDifficulty, token, completionToken) => {
+  const addScore = async (playerName, time, score, distance, won, gameDifficulty, token, completionToken, trainingData = []) => {
     // Only save winning scores
     if (!won) return
 
@@ -92,6 +92,13 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
       return
     }
 
+    // Require gameplay data (proof of actually playing)
+    if (!trainingData || trainingData.length === 0) {
+      console.error('[Scoreboard] Cannot submit score: No gameplay data')
+      setError('No gameplay data recorded. Please play the game again with data collection enabled.')
+      return
+    }
+
     try {
       const scoreData = {
         name: playerName.trim() || 'Anonymous',
@@ -99,10 +106,14 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
         score,
         distance,
         difficulty: gameDifficulty || 'easy',
-        completion_token: completionToken  // NEW: Required proof of game completion
+        completion_token: completionToken,  // Proof of game completion
+        training_data: trainingData  // Gameplay recording for validation
       }
 
-      console.log('[Scoreboard] Submitting score with completion token:', scoreData)
+      console.log('[Scoreboard] Submitting score with completion token and gameplay data:', {
+        ...scoreData,
+        training_data: `${trainingData.length} frames`
+      })
       const response = await rlAPI.submitScore(scoreData, token)
       console.log('[Scoreboard] Server response:', response.data)
 
@@ -114,11 +125,20 @@ export default function Scoreboard({ onNewScore, difficulty = 'easy', authToken 
     } catch (err) {
       console.error('Failed to submit score:', err)
 
+      // Log full error details for debugging
+      if (err.response) {
+        console.error('[Scoreboard] Error response status:', err.response.status)
+        console.error('[Scoreboard] Error response data:', err.response.data)
+      }
+
       // Show authentication errors to user
       if (err.response?.status === 401) {
         setError('Authentication failed: Please log in again to submit scores')
       } else if (err.response?.status === 400) {
         setError('Invalid score: ' + (err.response?.data?.detail || 'Score validation failed'))
+      } else if (err.response?.status === 422) {
+        console.error('[Scoreboard] Validation error details:', JSON.stringify(err.response.data, null, 2))
+        setError('Score data validation failed: ' + (err.response?.data?.detail || 'Invalid data format'))
       } else {
         // Don't show other errors to avoid cluttering UI
         console.error('[Scoreboard] Score submission error:', err.message)
