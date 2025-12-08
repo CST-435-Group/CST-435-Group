@@ -39,6 +39,9 @@ for possible_path in [
 if RL_BACKEND_PATH:
     sys.path.insert(0, str(RL_BACKEND_PATH))
 
+# Launcher backend path (for BC models stored in launcher/backend/models)
+LAUNCHER_BACKEND_PATH = Path(__file__).parent.parent
+
 
 class TrainingStatus(BaseModel):
     """Training status response"""
