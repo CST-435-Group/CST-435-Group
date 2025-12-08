@@ -95,6 +95,11 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     game.cameraX = 0
     game.jumpKeyWasPressed = false // Track if jump key was already pressed
 
+    // Add references for BC model feature extraction
+    game.difficulty = difficulty
+    game.enemies = game.map.enemies
+    game.goal = game.map.goal
+
     // Initialize AI if enabled
     if (enableAI) {
       console.log('\n🤖 ═══════════ AI INITIALIZATION STARTED ═══════════')
@@ -514,7 +519,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       // Start async prediction in background (non-blocking)
       if (!game.aiPredicting) {
         game.aiPredicting = true
-        aiAgent.predictAction(canvas, aiPlayer.x, game.cameraX)
+        aiAgent.predictAction(canvas, aiPlayer.x, game.cameraX, game, aiPlayer)
           .then(action => {
             game.aiLastAction = action
             game.aiPredicting = false
