@@ -68,6 +68,7 @@ class ScoreEntry(BaseModel):
     distance: int
     difficulty: str = 'easy'  # easy, medium, hard
     completion_token: str  # Required: proof that player reached the goal
+    training_data: List[Dict[str, Any]]  # Required: gameplay recording for validation
     timestamp: Optional[str] = None
     date: Optional[str] = None
 
@@ -177,6 +178,20 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def get_client_info(request: Request) -> dict:
+    """
+    Extract client information including IP and User Agent
+    User Agent provides: browser, OS, device type - helps identify unique devices on shared IPs
+
+    Returns:
+        dict with 'ip' and 'user_agent' keys
+    """
+    return {
+        'ip': get_client_ip(request),
+        'user_agent': request.headers.get("User-Agent", "unknown")
+    }
+
+
 def log_activity(activity_type: str, details: dict):
     """
     Log suspicious activity to audit log file
@@ -202,9 +217,13 @@ def log_activity(activity_type: str, details: dict):
     # Append to monthly log file
     try:
         logs = []
-        if log_file.exists():
-            with open(log_file, 'r') as f:
-                logs = json.load(f)
+        if log_file.exists() and log_file.stat().st_size > 0:
+            try:
+                with open(log_file, 'r') as f:
+                    logs = json.load(f)
+            except json.JSONDecodeError:
+                # File is empty or corrupted, start fresh
+                logs = []
 
         logs.append(log_entry)
 
@@ -276,15 +295,15 @@ def register_user(user_data: UserRegister, request: Request):
     """
     Register a new user account
     Returns JWT token on success
-    Logs IP address for security monitoring
+    Logs IP address and User Agent for security monitoring
     """
-    client_ip = get_client_ip(request)
+    client_info = get_client_info(request)
     users = load_users()
 
     # Check if username already exists
     if any(u['username'].lower() == user_data.username.lower() for u in users):
         log_activity("registration_failed", {
-            "ip": client_ip,
+            **client_info,
             "username": user_data.username,
             "reason": "username_already_exists"
         })
@@ -311,7 +330,8 @@ def register_user(user_data: UserRegister, request: Request):
         "total_points": 0,
         "total_distance": 0,
         "total_playtime": 0.0,
-        "registration_ip": client_ip  # Store registration IP
+        "registration_ip": client_info['ip'],  # Store registration IP
+        "registration_user_agent": client_info['user_agent']  # Store registration device
     }
 
     users.append(new_user)
@@ -319,7 +339,7 @@ def register_user(user_data: UserRegister, request: Request):
 
     # Log successful registration
     log_activity("user_registered", {
-        "ip": client_ip,
+        **client_info,
         "username": user_data.username,
         "user_id": user_id
     })
@@ -345,9 +365,9 @@ def login_user(user_data: UserLogin, request: Request):
     """
     Login with username and password
     Returns JWT token on success
-    Logs IP address for security monitoring
+    Logs IP address and User Agent for security monitoring
     """
-    client_ip = get_client_ip(request)
+    client_info = get_client_info(request)
     users = load_users()
 
     # Find user
@@ -356,7 +376,7 @@ def login_user(user_data: UserLogin, request: Request):
     if not user:
         # Log failed login attempt
         log_activity("login_failed", {
-            "ip": client_ip,
+            **client_info,
             "username": user_data.username,
             "reason": "user_not_found"
         })
@@ -366,7 +386,7 @@ def login_user(user_data: UserLogin, request: Request):
     if not verify_password(user_data.password, user['password_hash']):
         # Log failed login attempt
         log_activity("login_failed", {
-            "ip": client_ip,
+            **client_info,
             "username": user_data.username,
             "reason": "invalid_password"
         })
@@ -374,7 +394,7 @@ def login_user(user_data: UserLogin, request: Request):
 
     # Log successful login
     log_activity("user_login", {
-        "ip": client_ip,
+        **client_info,
         "username": user['username'],
         "user_id": user['user_id']
     })
@@ -1473,11 +1493,6 @@ JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production-INSEC
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DAYS = 30
 
-# Game Completion Secret
-# Shared secret between frontend and backend to prevent manual API abuse
-# Frontend must provide this to request completion tokens
-GAME_COMPLETION_SECRET = os.getenv("GAME_COMPLETION_SECRET", "INSECURE-change-in-production")
-
 
 # ============================================================================
 # USER AUTHENTICATION FUNCTIONS
@@ -1616,7 +1631,7 @@ def save_scores(scores: List[Dict[str, Any]]):
 
 def load_used_tokens() -> List[str]:
     """Load list of used completion tokens"""
-    if not TOKENS_DB_PATH.exists():
+    if not TOKENS_DB_PATH.exists() or TOKENS_DB_PATH.stat().st_size == 0:
         return []
 
     try:
@@ -1627,7 +1642,7 @@ def load_used_tokens() -> List[str]:
             data['tokens'] = [t for t in data.get('tokens', [])
                             if current_time - t.get('used_at', 0) < 86400]
             return [t['token'] for t in data['tokens']]
-    except Exception:
+    except (json.JSONDecodeError, Exception):
         return []
 
 
@@ -1637,11 +1652,14 @@ def mark_token_used(token: str):
         TOKENS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
         # Load existing tokens
-        if TOKENS_DB_PATH.exists():
-            with open(TOKENS_DB_PATH, 'r') as f:
-                data = json.load(f)
-        else:
-            data = {'tokens': []}
+        data = {'tokens': []}
+        if TOKENS_DB_PATH.exists() and TOKENS_DB_PATH.stat().st_size > 0:
+            try:
+                with open(TOKENS_DB_PATH, 'r') as f:
+                    data = json.load(f)
+            except json.JSONDecodeError:
+                # File is empty or corrupted, start fresh
+                data = {'tokens': []}
 
         # Add new token with timestamp
         data['tokens'].append({
@@ -1657,14 +1675,250 @@ def mark_token_used(token: str):
         raise
 
 
-class GameCompleteRequest(BaseModel):
-    """Request to get completion token - requires secret to prevent manual API abuse"""
-    game_secret: str
+def count_recent_completion_tokens(user_id: str, minutes: int = 60) -> int:
+    """
+    Count how many completion tokens a user has requested in the last N minutes.
+    Used for rate limiting.
+
+    Args:
+        user_id: The user's unique ID
+        minutes: Time window to check (default 60 minutes)
+
+    Returns:
+        Number of completion tokens requested in the time window
+    """
+    try:
+        log_dir = DATA_DIR / "audit_logs"
+        if not log_dir.exists():
+            return 0
+
+        # Check current month's log file
+        current_month = datetime.utcnow().strftime('%Y-%m')
+        log_file = log_dir / f"activity_{current_month}.json"
+
+        if not log_file.exists():
+            return 0
+
+        # Calculate cutoff time
+        cutoff_time = time.time() - (minutes * 60)
+
+        # Read and parse log file
+        count = 0
+        with open(log_file, 'r') as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    # Check if this is a game_completed event for this user
+                    if (entry.get('type') == 'game_completed' and
+                        entry.get('user_id') == user_id):
+                        # Parse timestamp
+                        timestamp_str = entry.get('timestamp', '')
+                        entry_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')).timestamp()
+
+                        # Count if within time window
+                        if entry_time >= cutoff_time:
+                            count += 1
+                except (json.JSONDecodeError, ValueError, KeyError):
+                    continue
+
+        return count
+    except Exception as e:
+        print(f"Error counting recent completion tokens: {e}")
+        # Fail open - don't block users if we can't read logs
+        return 0
+
+
+def validate_score_physics(score_entry: ScoreEntry) -> tuple[bool, str]:
+    """
+    Validate that score is physically possible based on game mechanics.
+
+    Returns:
+        (is_valid, reason_if_invalid)
+    """
+    # Distance bounds (game has finite level length)
+    MAX_DISTANCE = 50000  # Maximum possible distance in game
+    MIN_DISTANCE = 100    # Must move at least 100 pixels
+
+    if score_entry.distance < MIN_DISTANCE:
+        return False, "distance_too_low"
+    if score_entry.distance > MAX_DISTANCE:
+        return False, "distance_too_high"
+
+    # Time validation - minimum time based on distance
+    # Max player speed ~400 pixels/sec with sprint
+    # But realistically need time for jumps, platforms, etc.
+    min_possible_time = score_entry.distance / 600  # Very generous max speed
+    if score_entry.time < min_possible_time:
+        return False, "time_too_fast_for_distance"
+
+    # Time validation - maximum reasonable time (prevents absurdly long games)
+    max_reasonable_time = 600  # 10 minutes is plenty for any legit run
+    if score_entry.time > max_reasonable_time:
+        return False, "time_too_long"
+
+    # Score validation - must be reasonable for distance
+    # Score formula: distance/100 + collectibles*10
+    # Max collectibles per 100 pixels: ~0.5, so max score ~= distance/100 + distance/200
+    max_possible_score = (score_entry.distance / 20) * 1.5  # 50% margin
+    if score_entry.score > max_possible_score:
+        return False, "score_too_high_for_distance"
+
+    # Score should not be negative
+    if score_entry.score < 0:
+        return False, "negative_score"
+
+    # Difficulty validation
+    valid_difficulties = {'easy', 'medium', 'hard'}
+    if score_entry.difficulty not in valid_difficulties:
+        return False, "invalid_difficulty"
+
+    return True, ""
+
+
+def validate_gameplay_recording(score_entry: ScoreEntry) -> tuple[bool, str]:
+    """
+    Validate score against submitted gameplay recording (training data).
+    This is the strongest anti-cheat measure - verifying the actual gameplay.
+
+    Returns:
+        (is_valid, reason_if_invalid)
+    """
+    if not score_entry.training_data or len(score_entry.training_data) == 0:
+        # No training data provided - REJECT the score
+        # Training data is REQUIRED to prove the game was actually played
+        return False, "no_gameplay_data_provided"
+
+    try:
+        data_points = score_entry.training_data
+
+        # Validation 1: Minimum number of frames
+        # A valid game should have at least 30 frames (0.5 seconds at 60fps)
+        if len(data_points) < 30:
+            return False, "insufficient_gameplay_frames"
+
+        # Validation 2: Sequential frames
+        # Frames should be sequential without huge gaps
+        for i in range(1, len(data_points)):
+            prev_frame = data_points[i-1].get('frame_number', 0)
+            curr_frame = data_points[i].get('frame_number', 0)
+            frame_gap = curr_frame - prev_frame
+
+            # Allow small gaps (1-5 frames) for dropped frames, but not huge jumps
+            if frame_gap > 10:
+                return False, "non_sequential_frames"
+
+        # Validation 3: Distance matches final player position
+        # The claimed distance should approximately match the final player_x position
+        final_data = data_points[-1]
+        final_player_x = final_data.get('player_x', 0)
+
+        # Allow 10% margin of error for rounding/camera offset
+        distance_lower = score_entry.distance * 0.9
+        distance_upper = score_entry.distance * 1.1
+
+        if not (distance_lower <= final_player_x <= distance_upper):
+            return False, "distance_mismatch_with_gameplay"
+
+        # Validation 4: Time matches frame count
+        # Assuming 60 FPS, time should be approximately frames/60
+        first_frame = data_points[0].get('frame_number', 0)
+        last_frame = data_points[-1].get('frame_number', 0)
+        frame_duration = last_frame - first_frame
+        expected_time = frame_duration / 60.0  # 60 FPS
+
+        # Allow 20% margin for variable frame rate
+        time_lower = expected_time * 0.8
+        time_upper = expected_time * 1.2
+
+        if not (time_lower <= score_entry.time <= time_upper):
+            return False, "time_mismatch_with_gameplay"
+
+        # Validation 5: Difficulty matches
+        # All data points should have the same difficulty as the score
+        for point in data_points:
+            if point.get('difficulty') != score_entry.difficulty:
+                return False, "difficulty_mismatch_in_gameplay"
+
+        # Validation 6: Player progresses forward
+        # Player X position should generally increase over time (moving right)
+        # Check first 10% and last 10% of data
+        early_avg_x = sum(p.get('player_x', 0) for p in data_points[:max(1, len(data_points)//10)]) / max(1, len(data_points)//10)
+        late_avg_x = sum(p.get('player_x', 0) for p in data_points[-max(1, len(data_points)//10):]) / max(1, len(data_points)//10)
+
+        # Player should have moved significantly forward
+        if late_avg_x <= early_avg_x + 100:  # At least 100 pixels forward
+            return False, "insufficient_forward_progress"
+
+        # All validations passed!
+        return True, ""
+
+    except Exception as e:
+        print(f"Error validating gameplay recording: {e}")
+        # If validation fails due to error, fail safe - reject the score
+        return False, "gameplay_validation_error"
+
+
+def detect_suspicious_patterns(user_id: str, score_entry: ScoreEntry, all_scores: List[Dict]) -> tuple[bool, str]:
+    """
+    Detect suspicious patterns in score submissions.
+
+    Returns:
+        (is_suspicious, reason)
+    """
+    # Get all scores for this user
+    user_scores = [s for s in all_scores if s.get('user_id') == user_id]
+
+    if len(user_scores) == 0:
+        return False, ""  # First score, can't detect patterns
+
+    # Pattern 1: Identical scores across ALL difficulties
+    # Real players vary, cheaters often submit same score everywhere
+    if len(user_scores) >= 2:
+        identical_count = 0
+        for existing in user_scores:
+            if (existing['score'] == score_entry.score and
+                existing['distance'] == score_entry.distance and
+                existing['difficulty'] != score_entry.difficulty):  # Different difficulty, same stats
+                identical_count += 1
+
+        # If user has 2+ identical scores on different difficulties, suspicious
+        if identical_count >= 2:
+            return True, "identical_scores_across_difficulties"
+
+    # Pattern 2: Impossibly perfect consistency
+    # Real players have variance, bots/cheaters often submit perfect rounds
+    if len(user_scores) >= 3:
+        # Check if all scores are exactly the same
+        all_same = all(
+            s['score'] == user_scores[0]['score'] and
+            s['distance'] == user_scores[0]['distance']
+            for s in user_scores
+        )
+        if all_same:
+            return True, "perfect_consistency_all_games"
+
+    # Pattern 3: Impossibly fast improvement
+    # Real players improve gradually, cheaters jump from bad to perfect
+    user_scores_same_difficulty = [
+        s for s in user_scores
+        if s.get('difficulty') == score_entry.difficulty
+    ]
+
+    if len(user_scores_same_difficulty) >= 1:
+        best_existing_time = min(s['time'] for s in user_scores_same_difficulty)
+        # If new time is less than 50% of previous best, very suspicious
+        # (unless both are very small times < 5 seconds, which might be valid)
+        if score_entry.time < best_existing_time * 0.5 and best_existing_time > 5:
+            return True, "impossible_improvement_rate"
+
+    # Pattern 4: Submission timing - too fast after token request
+    # This is already checked in the endpoint, but we can add more logic here if needed
+
+    return False, ""
 
 
 @router.post("/game-complete", summary="Generate Completion Token")
 def game_complete(
-    complete_request: GameCompleteRequest,
     request: Request,
     authorization: Optional[str] = Header(None)
 ):
@@ -1672,25 +1926,23 @@ def game_complete(
     Generate a completion token when player reaches the goal.
     This token must be submitted with the score to prove the game was actually completed.
 
-    SECURITY: Requires game_secret to prevent manual API calls from getting tokens.
-    Only the frontend knows this secret.
+    SECURITY:
+    - Requires JWT authentication
+    - Rate limited to 10 requests per hour per user
+    - Tokens are single-use and expire in 5 minutes
 
     Returns:
         completion_token: JWT signed token proving goal was reached
     """
-    # Validate game secret (prevents manual API abuse)
-    if complete_request.game_secret != GAME_COMPLETION_SECRET:
-        log_activity("game_completion_denied", {
-            "ip": get_client_ip(request),
-            "reason": "invalid_game_secret"
-        })
-        raise HTTPException(
-            status_code=403,
-            detail="Forbidden: Invalid game secret"
-        )
+    # Get client info (IP + User Agent)
+    client_info = get_client_info(request)
 
     # Require authentication
     if not authorization:
+        log_activity("game_completion_denied", {
+            **client_info,
+            "reason": "no_authentication"
+        })
         raise HTTPException(
             status_code=401,
             detail="Unauthorized: Must be logged in to complete game"
@@ -1700,9 +1952,27 @@ def game_complete(
         user = get_current_user(authorization)
         user_id = user['user_id']
     except Exception as e:
+        log_activity("game_completion_denied", {
+            **client_info,
+            "reason": "invalid_token"
+        })
         raise HTTPException(
             status_code=401,
             detail="Unauthorized: Invalid or expired token"
+        )
+
+    # Rate limiting: Check recent completion tokens for this user
+    recent_count = count_recent_completion_tokens(user_id, minutes=60)
+    if recent_count >= 10:  # Max 10 completion tokens per hour
+        log_activity("game_completion_denied", {
+            **client_info,
+            "user_id": user_id,
+            "reason": "rate_limit_exceeded",
+            "recent_count": recent_count
+        })
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Maximum 10 game completions per hour. Please wait before trying again."
         )
 
     # Generate unique completion token
@@ -1719,9 +1989,9 @@ def game_complete(
 
     # Log completion
     log_activity("game_completed", {
+        **client_info,
         "user_id": user_id,
-        "token_id": token_id,
-        "ip": get_client_ip(request)
+        "token_id": token_id
     })
 
     return {
@@ -1731,16 +2001,23 @@ def game_complete(
 
 
 @router.get("/scores", summary="Get Leaderboard Scores")
-def get_scores(limit: int = 10, difficulty: str = 'easy'):
+def get_scores(limit: int = 10, difficulty: str = 'easy', include_flagged: bool = False):
     """
     Get top scores from the global leaderboard
     Returns scores sorted by completion time (fastest first)
     Filters by difficulty level (easy, medium, hard)
+
+    By default, excludes flagged/suspicious scores from the leaderboard.
+    Set include_flagged=true to see all scores (for admin review).
     """
     scores = load_scores()
 
     # Filter by difficulty
     filtered_scores = [s for s in scores if s.get('difficulty', 'easy') == difficulty]
+
+    # Exclude flagged scores unless explicitly requested
+    if not include_flagged:
+        filtered_scores = [s for s in filtered_scores if not s.get('flagged', False)]
 
     # Sort by time (fastest first) and limit results
     sorted_scores = sorted(filtered_scores, key=lambda x: x['time'])[:limit]
@@ -1749,7 +2026,8 @@ def get_scores(limit: int = 10, difficulty: str = 'easy'):
         "scores": sorted_scores,
         "total_count": len(filtered_scores),
         "returned_count": len(sorted_scores),
-        "difficulty": difficulty
+        "difficulty": difficulty,
+        "flagged_excluded": not include_flagged
     }
 
 
@@ -1759,17 +2037,17 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
     Submit a new score to the global leaderboard
     If logged in, score is linked to user_id
     If player already has a score for this difficulty, only updates if new time is better (faster)
-    Logs IP addresses for security and abuse detection
+    Logs IP addresses and User Agent for security and abuse detection
     """
     from datetime import datetime
 
-    # Get client IP for logging
-    client_ip = get_client_ip(request)
+    # Get client info (IP + User Agent) for logging
+    client_info = get_client_info(request)
 
     # Require authentication - only registered users can submit scores
     if not authorization:
         log_activity("score_submission_denied", {
-            "ip": client_ip,
+            **client_info,
             "reason": "not_authenticated",
             "attempted_name": score_entry.name
         })
@@ -1784,7 +2062,7 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
         player_name = user['username']  # Always use registered username
     except Exception as e:
         log_activity("score_submission_denied", {
-            "ip": client_ip,
+            **client_info,
             "reason": "invalid_token",
             "attempted_name": score_entry.name
         })
@@ -1813,7 +2091,7 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
         used_tokens = load_used_tokens()
         if score_entry.completion_token in used_tokens:
             log_activity("score_submission_denied", {
-                "ip": client_ip,
+                **client_info,
                 "username": player_name,
                 "user_id": user_id,
                 "reason": "token_already_used",
@@ -1829,7 +2107,7 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
 
     except jwt.ExpiredSignatureError:
         log_activity("score_submission_denied", {
-            "ip": client_ip,
+            **client_info,
             "username": player_name,
             "user_id": user_id,
             "reason": "completion_token_expired",
@@ -1841,7 +2119,7 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
         )
     except (jwt.InvalidTokenError, ValueError) as e:
         log_activity("score_submission_denied", {
-            "ip": client_ip,
+            **client_info,
             "username": player_name,
             "user_id": user_id,
             "reason": "invalid_completion_token",
@@ -1855,70 +2133,62 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
     # Load existing scores
     scores = load_scores()
 
-    # Validate score legitimacy (prevent fake/cheated scores)
-    # Minimum 1 second required (prevents 0.01 exploit that rounds to 0.0)
-    MIN_TIME = 1.0
-    MIN_DISTANCE = 100  # Must move at least 100 pixels to have a valid run
-
-    # Basic validation
-    if score_entry.time < MIN_TIME or score_entry.distance < MIN_DISTANCE or score_entry.score < 0:
+    # ENHANCED VALIDATION: Check if score is physically possible
+    is_valid, validation_reason = validate_score_physics(score_entry)
+    if not is_valid:
         log_activity("invalid_score_rejected", {
-            "ip": client_ip,
+            **client_info,
             "username": player_name,
             "user_id": user_id,
             "time": score_entry.time,
             "score": score_entry.score,
             "distance": score_entry.distance,
             "difficulty": score_entry.difficulty,
-            "reason": "basic_validation_failed"
+            "reason": validation_reason
         })
-
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid score: time must be >= {MIN_TIME}s, distance must be >= {MIN_DISTANCE}, score must be >= 0"
+            detail=f"Invalid score: {validation_reason.replace('_', ' ')}"
         )
 
-    # Validate score vs distance relationship
-    # Score = distance/100 + coins*10, so max realistic score is ~distance/50 (lots of coins)
-    # Min realistic score is ~distance/200 (no coins)
-    max_realistic_score = score_entry.distance / 20  # Very generous upper bound
-    if score_entry.score > max_realistic_score:
+    # GAMEPLAY RECORDING VALIDATION: Verify score matches submitted gameplay data
+    # This is the strongest anti-cheat - validates actual gameplay recording
+    is_gameplay_valid, gameplay_reason = validate_gameplay_recording(score_entry)
+    if not is_gameplay_valid:
         log_activity("invalid_score_rejected", {
-            "ip": client_ip,
+            **client_info,
             "username": player_name,
             "user_id": user_id,
             "time": score_entry.time,
             "score": score_entry.score,
             "distance": score_entry.distance,
             "difficulty": score_entry.difficulty,
-            "reason": "score_too_high_for_distance"
+            "reason": gameplay_reason,
+            "validation_type": "gameplay_recording"
         })
-
         raise HTTPException(
             status_code=400,
-            detail="Invalid score: score is impossibly high for distance traveled"
+            detail=f"Score does not match gameplay recording: {gameplay_reason.replace('_', ' ')}"
         )
 
-    # Validate distance vs time relationship (prevent impossible speeds)
-    # Max speed: ~10 pixels/frame * 60 frames/sec = 600 pixels/sec
-    # Give generous buffer: 1000 pixels/sec
-    max_realistic_distance = score_entry.time * 1000
-    if score_entry.distance > max_realistic_distance:
-        log_activity("invalid_score_rejected", {
-            "ip": client_ip,
+    # ANOMALY DETECTION: Check for suspicious patterns
+    is_suspicious, suspicious_reason = detect_suspicious_patterns(user_id, score_entry, scores)
+    flagged = False
+    flag_reason = None
+
+    if is_suspicious:
+        flagged = True
+        flag_reason = suspicious_reason
+        log_activity("suspicious_score_flagged", {
+            **client_info,
             "username": player_name,
             "user_id": user_id,
             "time": score_entry.time,
             "score": score_entry.score,
             "distance": score_entry.distance,
             "difficulty": score_entry.difficulty,
-            "reason": "distance_too_high_for_time"
+            "reason": suspicious_reason
         })
-
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid score: distance is impossibly high for time elapsed"
-        )
 
     # Create new score entry
     new_score = {
@@ -1930,7 +2200,10 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
         "timestamp": datetime.utcnow().isoformat(),
         "date": datetime.utcnow().strftime("%Y-%m-%d"),
         "user_id": user_id,  # Link to user if authenticated
-        "ip_address": client_ip  # Store IP for abuse tracking
+        "ip_address": client_info['ip'],  # Store IP for abuse tracking
+        "user_agent": client_info['user_agent'],  # Store User Agent for device identification
+        "flagged": flagged,  # Mark if anomaly detected
+        "flag_reason": flag_reason if flagged else None  # Reason for flagging
     }
 
     # Check if player already exists for this difficulty
@@ -1957,7 +2230,7 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
 
             # Log score update
             log_activity("score_updated", {
-                "ip": client_ip,
+                **client_info,
                 "username": player_name,
                 "user_id": user_id,
                 "difficulty": new_score['difficulty'],
@@ -1967,12 +2240,16 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
                 "distance": new_score['distance']
             })
 
-            return {
+            response = {
                 "status": "updated",
                 "message": f"New best time for {new_score['name']} on {new_score['difficulty']}!",
                 "score": new_score,
                 "previous_time": previous_time
             }
+            if flagged:
+                response["warning"] = f"Score flagged for review: {flag_reason.replace('_', ' ')}"
+                response["under_review"] = True
+            return response
         else:
             return {
                 "status": "not_updated",
@@ -1987,7 +2264,7 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
 
         # Log new score submission
         log_activity("score_created", {
-            "ip": client_ip,
+            **client_info,
             "username": player_name,
             "user_id": user_id,
             "difficulty": new_score['difficulty'],
@@ -1996,11 +2273,15 @@ def submit_score(score_entry: ScoreEntry, request: Request, authorization: Optio
             "distance": new_score['distance']
         })
 
-        return {
+        response = {
             "status": "created",
             "message": f"Score added for {new_score['name']} on {new_score['difficulty']}",
             "score": new_score
         }
+        if flagged:
+            response["warning"] = f"Score flagged for review: {flag_reason.replace('_', ' ')}"
+            response["under_review"] = True
+        return response
 
 
 @router.delete("/scores", summary="Clear All Scores (Admin Only)")
@@ -2010,7 +2291,7 @@ def clear_scores(request: Request, auth: AdminAuth = None):
     WARNING: This is irreversible!
     Requires admin password for authorization (sent in request body)
     """
-    client_ip = get_client_ip(request)
+    client_info = get_client_info(request)
 
     # Admin password check - MUST be set in environment variables
     ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD")
@@ -2023,7 +2304,7 @@ def clear_scores(request: Request, auth: AdminAuth = None):
     if not auth or not auth.admin_password or auth.admin_password != ADMIN_PASSWORD:
         # Log unauthorized attempt
         log_activity("leaderboard_clear_denied", {
-            "ip": client_ip,
+            **client_info,
             "reason": "invalid_admin_password"
         })
         raise HTTPException(
@@ -2040,7 +2321,7 @@ def clear_scores(request: Request, auth: AdminAuth = None):
 
         # Log successful clear
         log_activity("leaderboard_cleared", {
-            "ip": client_ip,
+            **client_info,
             "scores_deleted": scores_count
         })
 
@@ -2066,7 +2347,7 @@ def delete_score(
     - Users can delete their own scores (if authenticated via JWT token)
     - Admin can delete any score with admin password (sent in request body)
     """
-    client_ip = get_client_ip(request)
+    client_info = get_client_info(request)
 
     # Check admin password first (allows admin to delete any score)
     ADMIN_PASSWORD = os.getenv("LEADERBOARD_ADMIN_PASSWORD")
@@ -2083,7 +2364,7 @@ def delete_score(
             if not authorization:
                 # Log unauthorized deletion attempt
                 log_activity("score_delete_denied", {
-                    "ip": client_ip,
+                    **client_info,
                     "attempted_delete": player_name,
                     "difficulty": difficulty,
                     "reason": "no_authentication"
@@ -2098,7 +2379,7 @@ def delete_score(
             # Check if user is trying to delete their own score
             if user['username'].lower() != player_name.lower():
                 log_activity("score_delete_denied", {
-                    "ip": client_ip,
+                    **client_info,
                     "username": user['username'],
                     "attempted_delete": player_name,
                     "difficulty": difficulty,
@@ -2113,7 +2394,7 @@ def delete_score(
         except Exception:
             # Log invalid token attempt
             log_activity("score_delete_denied", {
-                "ip": client_ip,
+                **client_info,
                 "attempted_delete": player_name,
                 "difficulty": difficulty,
                 "reason": "invalid_token"
@@ -2140,7 +2421,7 @@ def delete_score(
 
         # Log successful deletion
         log_activity("score_deleted", {
-            "ip": client_ip,
+            **client_info,
             "deleted_player": player_name,
             "difficulty": difficulty,
             "by_admin": is_admin
