@@ -297,6 +297,8 @@ function RLProject() {
 
   const handleGameComplete = async (gameData) => {
     console.log('[RLProject] Game completed:', gameData)
+    console.log('[RLProject] Training data length:', gameData.trainingData ? gameData.trainingData.length : 0)
+    console.log('[RLProject] Training data sample:', gameData.trainingData ? gameData.trainingData.slice(0, 2) : 'NONE')
 
     // Submit metrics if authenticated
     if (currentUser && authToken) {
@@ -321,8 +323,9 @@ function RLProject() {
         const tokenResponse = await rlAPI.requestCompletionToken(authToken)
         const completionToken = tokenResponse.data.completion_token
         console.log('[RLProject] Got completion token, submitting score...')
+        console.log('[RLProject] About to submit training data with length:', gameData.trainingData ? gameData.trainingData.length : 0)
 
-        // Submit score with completion token
+        // Submit score with completion token and gameplay recording
         scoreboardRef.current(
           currentUser.username,
           gameData.time,
@@ -331,7 +334,8 @@ function RLProject() {
           gameData.won,
           difficulty,
           authToken,
-          completionToken  // NEW: Pass completion token
+          completionToken,  // Proof of game completion
+          gameData.trainingData || []  // Gameplay recording for validation
         )
       } catch (error) {
         console.error('[RLProject] Failed to get completion token or submit score:', error)
