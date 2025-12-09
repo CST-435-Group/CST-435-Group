@@ -14,6 +14,30 @@ import base64
 from pathlib import Path
 import sys
 
+# Try to use torchvision if available, fall back to mock
+try:
+    from torchvision.transforms import ToPILImage
+except ImportError:
+    # Use mock if torchvision not available
+    try:
+        from torchvision_mock import ToPILImageMock as ToPILImage
+    except ImportError:
+        # Create a simple fallback
+        from PIL import Image
+        class ToPILImage:
+            def __init__(self, mode='RGB'):
+                self.mode = mode
+            
+            def __call__(self, tensor):
+                if tensor.dim() == 3 and tensor.shape[0] == 3:
+                    tensor = tensor.permute(1, 2, 0)
+                np_array = tensor.cpu().detach().numpy()
+                if np_array.max() <= 1.0:
+                    np_array = (np_array * 255).astype('uint8')
+                else:
+                    np_array = np_array.astype('uint8')
+                return Image.fromarray(np_array, mode=self.mode)
+
 # Create router
 router = APIRouter()
 
@@ -215,8 +239,6 @@ def generate_images_internal(tank_idx: int, view_idx: int, num_images: int, seed
 
 def tensor_to_base64(tensor):
     """Convert a tensor image to base64 PNG"""
-    from torchvision.transforms import ToPILImage
-
     to_pil = ToPILImage()
     img = to_pil(tensor)
 
