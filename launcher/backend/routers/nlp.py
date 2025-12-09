@@ -8,18 +8,17 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
 os.environ['USE_TF'] = '0'  # Disable TensorFlow in transformers
 os.environ['USE_TORCH'] = '1'  # Enable PyTorch in transformers
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'  # Fix circular import with torchvision
 
 import sys
 import warnings
 warnings.filterwarnings('ignore')
 
-# Import torch and torchvision first to avoid circular imports
+# Suppress torchvision import warnings
 try:
     import torch
-    import torchvision
-except ImportError as e:
-    print(f"[WARNING] Could not import torch/torchvision: {e}")
+    torch.cuda.is_available()  # Trigger torch initialization
+except Exception:
+    pass
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
