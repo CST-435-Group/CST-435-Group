@@ -10,9 +10,10 @@ python-multipart==0.0.6
 # PyTorch (CPU version for Railway) - updated for security (CVE-2025-32434)
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.6.0+cpu
+torchvision==0.18.0+cpu
 
 # Transformers for NLP - updated for compatibility
-transformers==4.48.0
+transformers==4.46.0
 
 # Data processing - pinned versions (Python 3.12 compatible)
 numpy==1.26.4
