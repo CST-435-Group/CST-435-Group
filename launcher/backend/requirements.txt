@@ -9,7 +9,7 @@ python-multipart==0.0.6
 
 # PyTorch (CPU version for Railway) - pinned for stability
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.1.2+cpu
+torch==2.3.1+cpu
 
 # Transformers for NLP - compatible with torch 2.1.2
 transformers==4.35.2
