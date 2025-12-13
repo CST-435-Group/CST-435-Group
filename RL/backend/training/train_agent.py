@@ -151,6 +151,40 @@ def train_agent(total_timesteps=1_000_000, save_path="models/platformer_agent"):
     print(f"\n[SUCCESS] Training complete!")
     print(f"[SUCCESS] Model saved to: {save_path}.zip")
 
+    # Auto-export trained model to ONNX for web deployment
+    print(f"\n[EXPORT] Auto-exporting model to ONNX format for web deployment...")
+    try:
+        import subprocess
+        import sys
+        export_script = os.path.join(os.path.dirname(__file__), 'export_model_onnx.py')
+
+        # Check if export environment exists
+        export_env_python = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'export_env', 'Scripts', 'python.exe')
+        if os.path.exists(export_env_python):
+            python_cmd = export_env_python
+            print(f"[EXPORT] Using export environment: {python_cmd}")
+        else:
+            python_cmd = sys.executable
+            print(f"[EXPORT] Using system Python: {python_cmd}")
+
+        # Export to ONNX
+        result = subprocess.run(
+            [python_cmd, export_script, '--model-path', f'{save_path}.zip'],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+
+        if result.returncode == 0:
+            print(f"[EXPORT] Model successfully exported to ONNX!")
+            print(f"[EXPORT] Output: {result.stdout}")
+        else:
+            print(f"[EXPORT] Warning: Model export failed: {result.stderr}")
+            print(f"[EXPORT] You can manually export later using: python export_model_onnx.py")
+    except Exception as e:
+        print(f"[EXPORT] Warning: Auto-export failed: {e}")
+        print(f"[EXPORT] You can manually export later using: python export_model_onnx.py")
+
     return model
 
 
@@ -158,6 +192,7 @@ class ProgressCallback(BaseCallback):
     """
     Custom callback to track and save training progress.
     Writes status.json and captures frames for intelligent visualization.
+    Captures the 30th frame before death for visualization.
     """
 
     def __init__(self, status_file="status.json",
@@ -176,31 +211,44 @@ class ProgressCallback(BaseCallback):
         self.episode_lengths = []
         self.best_reward = -float('inf')
 
-        # Frame buffer to store last frame before episode ends
-        self.last_frame = None
+        # Frame buffer to store last 30 frames before episode ends
+        self.frame_buffer = []  # Rolling buffer of last 30 frames
+        self.max_buffer_size = 30
+
+        # Episode checkpoint tracking (keep last 10)
+        self.episode_checkpoints = []  # List of dicts with episode info
+        self.max_checkpoints = 10
 
         # Create directories
         status_dir = os.path.dirname(status_file)
         if status_dir:  # Only create if there's a directory component
             os.makedirs(status_dir, exist_ok=True)
         os.makedirs(frame_dir, exist_ok=True)
+        os.makedirs('episode_checkpoints', exist_ok=True)
 
     def _on_step(self) -> bool:
         """Called at every environment step"""
 
-        # Capture current frame BEFORE episode ends (so we see the final state)
-        # This will be saved if the episode ends on this step
+        # Capture current frame and add to rolling buffer (keeps last 30 frames)
         try:
             env = self.training_env.envs[0]
             while hasattr(env, 'env'):
                 env = env.env
-            self.last_frame = env.render(mode='rgb_array')
+            current_frame = env.render(mode='rgb_array')
+
+            # Add to buffer (rolling buffer of last 30 frames)
+            self.frame_buffer.append(current_frame)
+            if len(self.frame_buffer) > self.max_buffer_size:
+                self.frame_buffer.pop(0)  # Remove oldest frame
         except Exception as e:
             if self.verbose > 0:
                 print(f"[FRAME] Error capturing frame: {e}")
 
         # Update status file every N steps
         if self.num_timesteps % self.save_freq == 0:
+            # Convert -inf to None for JSON serialization
+            best_reward_value = None if self.best_reward == -float('inf') else float(self.best_reward)
+
             status = {
                 'is_training': True,
                 'current_step': self.num_timesteps,
@@ -208,7 +256,7 @@ class ProgressCallback(BaseCallback):
                 'progress': self.num_timesteps / max(self.locals.get('total_timesteps', 1), 1),
                 'episodes': len(self.episode_rewards),
                 'avg_reward': float(np.mean(self.episode_rewards[-100:])) if self.episode_rewards else 0.0,
-                'best_reward': float(self.best_reward),
+                'best_reward': best_reward_value,
                 'avg_length': float(np.mean(self.episode_lengths[-100:])) if self.episode_lengths else 0.0,
                 'fps': 0,  # Would need timing to calculate
                 'timestamp': time.time()
@@ -236,24 +284,108 @@ class ProgressCallback(BaseCallback):
                     # Save best model
                     self.model.save('models/platformer_agent_best')
 
+                # Save episode checkpoint (keep last 10)
+                try:
+                    episode_num = len(self.episode_rewards)
+                    checkpoint_path = f'episode_checkpoints/episode_{episode_num:05d}_reward_{int(ep_reward)}'
+
+                    # Save the model
+                    self.model.save(checkpoint_path)
+
+                    # Auto-export checkpoint to ONNX for web deployment
+                    try:
+                        import subprocess
+                        import sys
+                        export_script = 'export_model_onnx.py'
+
+                        # Check if export environment exists
+                        export_env_python = os.path.join('..', 'export_env', 'Scripts', 'python.exe')
+                        if os.path.exists(export_env_python):
+                            python_cmd = export_env_python
+                        else:
+                            python_cmd = sys.executable
+
+                        # Export this checkpoint to ONNX
+                        output_dir = f'../models/episode_{episode_num}_onnx'
+                        subprocess.run(
+                            [python_cmd, export_script, '--model-path', f'{checkpoint_path}.zip', '--output-dir', output_dir],
+                            capture_output=True,
+                            timeout=60  # 1 minute timeout for checkpoint export
+                        )
+                        if self.verbose > 0:
+                            print(f"[CHECKPOINT] Exported episode {episode_num} to ONNX")
+                    except Exception as e:
+                        if self.verbose > 0:
+                            print(f"[CHECKPOINT] Warning: ONNX export failed for episode {episode_num}: {e}")
+
+                    # Track checkpoint info
+                    checkpoint_info = {
+                        'episode': episode_num,
+                        'reward': float(ep_reward),
+                        'length': int(ep_length),
+                        'timestep': self.num_timesteps,
+                        'path': checkpoint_path,
+                        'timestamp': time.time()
+                    }
+
+                    # Add to list
+                    self.episode_checkpoints.append(checkpoint_info)
+
+                    # Keep only last 10 checkpoints
+                    if len(self.episode_checkpoints) > self.max_checkpoints:
+                        # Remove oldest checkpoint
+                        old_checkpoint = self.episode_checkpoints.pop(0)
+                        # Delete old checkpoint files
+                        try:
+                            import shutil
+                            if os.path.exists(old_checkpoint['path'] + '.zip'):
+                                os.remove(old_checkpoint['path'] + '.zip')
+                            # Also delete ONNX export
+                            old_episode = old_checkpoint['episode']
+                            old_onnx_dir = f'../models/episode_{old_episode}_onnx'
+                            if os.path.exists(old_onnx_dir):
+                                shutil.rmtree(old_onnx_dir)
+                        except Exception as e:
+                            if self.verbose > 0:
+                                print(f"[CHECKPOINT] Warning: Failed to delete old checkpoint: {e}")
+
+                    # Save checkpoint manifest
+                    with open('episode_checkpoints/manifest.json', 'w') as f:
+                        json.dump(self.episode_checkpoints, f, indent=2)
+
+                    if self.verbose > 0:
+                        print(f"[CHECKPOINT] Saved episode {episode_num} (reward: {ep_reward:.1f})")
+
+                except Exception as e:
+                    if self.verbose > 0:
+                        print(f"[CHECKPOINT] Error saving checkpoint: {e}")
+
                 # Intelligent frame capture (save interesting episodes)
                 should_save = self._should_save_frame(
                     len(self.episode_rewards),
                     ep_reward
                 )
 
-                if should_save and self.last_frame is not None:
-                    # Save the buffered frame (captured BEFORE episode ended)
+                if should_save and len(self.frame_buffer) > 0:
+                    # Save the 30th frame before death (first frame in buffer)
+                    # If buffer has less than 30 frames, save the oldest available
                     try:
                         frame_filename = f"{self.frame_dir}/episode_{len(self.episode_rewards):05d}_reward_{int(ep_reward)}.png"
 
-                        # Use the buffered frame (shows player right before death/goal)
+                        # Get the 30th frame before death (first frame in buffer)
+                        frame_to_save = self.frame_buffer[0]
+
+                        # Save the frame
                         import pygame
-                        surface = pygame.surfarray.make_surface(self.last_frame.swapaxes(0, 1))
+                        surface = pygame.surfarray.make_surface(frame_to_save.swapaxes(0, 1))
                         pygame.image.save(surface, frame_filename)
 
                         if self.verbose > 0:
-                            print(f"[FRAME] Saved: {frame_filename}")
+                            frames_back = len(self.frame_buffer)
+                            print(f"[FRAME] Saved {frames_back}th frame before death: {frame_filename}")
+
+                        # Clear buffer for next episode
+                        self.frame_buffer = []
                     except Exception as e:
                         if self.verbose > 0:
                             print(f"[FRAME] Error saving frame: {e}")

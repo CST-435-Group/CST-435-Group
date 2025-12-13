@@ -2,13 +2,32 @@
 Export trained PyTorch model to TensorFlow.js format for web deployment
 """
 
+import os
+import sys
+
+# Fix Windows encoding issues with Unicode characters
+if sys.platform == 'win32':
+    # Set UTF-8 encoding for stdout/stderr
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    # Set environment variable for subprocess calls
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 import torch
 import onnx
 import numpy as np
 from stable_baselines3 import PPO
 from pathlib import Path
 import subprocess
-import sys
+
+# Check for optional dependencies
+try:
+    import onnx2tf
+    ONNX2TF_AVAILABLE = True
+except ImportError as e:
+    ONNX2TF_AVAILABLE = False
+    ONNX2TF_ERROR = str(e)
 
 
 def load_pytorch_model(model_path):
@@ -36,13 +55,30 @@ def extract_policy_network(model):
         model: Stable-Baselines3 model
 
     Returns:
-        torch.nn.Module: Policy network
+        torch.nn.Module: Policy network (features extractor + action head)
     """
     print("[EXPORT] Extracting policy network...")
-    # Get the actor (policy) network from the model
-    policy_net = model.policy
+
+    # Create a wrapper that returns logits instead of sampled actions
+    class PolicyLogits(torch.nn.Module):
+        def __init__(self, policy):
+            super().__init__()
+            self.features_extractor = policy.features_extractor
+            self.mlp_extractor = policy.mlp_extractor
+            self.action_net = policy.action_net
+
+        def forward(self, obs):
+            # Extract features from observation
+            features = self.features_extractor(obs)
+            # Pass through MLP
+            latent_pi, _ = self.mlp_extractor(features)
+            # Get action logits (before sampling)
+            logits = self.action_net(latent_pi)
+            return logits
+
+    policy_net = PolicyLogits(model.policy)
     policy_net.eval()  # Set to evaluation mode
-    print("[EXPORT] Policy network extracted")
+    print("[EXPORT] Policy network extracted (logits output)")
     return policy_net
 
 
@@ -69,14 +105,11 @@ def convert_to_onnx(policy_network, save_path, input_shape):
         dummy_input,
         save_path,
         export_params=True,
-        opset_version=11,
+        opset_version=18,  # Use opset 18 for better compatibility
         do_constant_folding=True,
         input_names=['observation'],
-        output_names=['action_logits'],
-        dynamic_axes={
-            'observation': {0: 'batch_size'},
-            'action_logits': {0: 'batch_size'}
-        }
+        output_names=['action_logits']
+        # Note: No dynamic_axes - use fixed batch size for onnx2tf compatibility
     )
 
     print(f"[EXPORT] ONNX model saved to {save_path}")
@@ -85,6 +118,20 @@ def convert_to_onnx(policy_network, save_path, input_shape):
     onnx_model = onnx.load(save_path)
     onnx.checker.check_model(onnx_model)
     print("[EXPORT] ONNX model verified successfully")
+
+    # Simplify the ONNX model for better conversion compatibility
+    try:
+        print("[EXPORT] Simplifying ONNX model...")
+        import onnxsim
+        simplified_model, check = onnxsim.simplify(onnx_model)
+        if check:
+            onnx.save(simplified_model, save_path)
+            print("[EXPORT] ONNX model simplified successfully")
+        else:
+            print("[EXPORT] Warning: ONNX simplification check failed, using original model")
+    except Exception as e:
+        print(f"[EXPORT] Warning: Could not simplify ONNX model: {e}")
+        print("[EXPORT] Continuing with original model...")
 
 
 def convert_onnx_to_tfjs(onnx_path, output_dir):
@@ -97,36 +144,62 @@ def convert_onnx_to_tfjs(onnx_path, output_dir):
     """
     print(f"[EXPORT] Converting ONNX to TensorFlow.js...")
 
+    # Check if onnx2tf is available
+    if not ONNX2TF_AVAILABLE:
+        error_msg = (
+            f"[ERROR] onnx2tf import failed: {ONNX2TF_ERROR}\n"
+            "[ERROR] This may be due to version conflicts between onnx, onnx_graphsurgeon, and onnx2tf.\n"
+            "[ERROR] Try installing compatible versions:\n"
+            "[ERROR]   pip install onnx==1.16.0 onnx_graphsurgeon==0.5.2 onnx2tf==1.20.0\n"
+            "[ERROR] Or use a virtual environment with the exact requirements."
+        )
+        print(error_msg)
+        raise RuntimeError(error_msg)
+
     # First convert ONNX to TensorFlow SavedModel
     tf_model_dir = output_dir / "tf_saved_model"
     tf_model_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[EXPORT] Step 1: Converting ONNX to TensorFlow SavedModel...")
+    conversion_success = False
+
+    # Try onnx-tf first (simpler, better for basic models)
     try:
-        # Use onnx-tf to convert ONNX to TensorFlow
-        result = subprocess.run(
-            [sys.executable, "-m", "onnx_tf.backend.cli", "convert",
-             "-i", str(onnx_path),
-             "-o", str(tf_model_dir)],
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-
-        if result.returncode != 0:
-            print(f"[EXPORT] Warning: onnx-tf conversion failed: {result.stderr}")
-            print(f"[EXPORT] Trying alternative method...")
-
-            # Alternative: Use Python API
-            import onnx_tf.backend
-            onnx_model = onnx.load(str(onnx_path))
-            tf_rep = onnx_tf.backend.prepare(onnx_model)
-            tf_rep.export_graph(str(tf_model_dir))
-
-        print(f"[EXPORT] TensorFlow SavedModel created")
+        print(f"[EXPORT] Trying onnx-tf converter...")
+        from onnx_tf.backend import prepare
+        onnx_model = onnx.load(str(onnx_path))
+        tf_rep = prepare(onnx_model)
+        tf_rep.export_graph(str(tf_model_dir))
+        print(f"[EXPORT] onnx-tf conversion successful!")
+        conversion_success = True
     except Exception as e:
-        print(f"[EXPORT] Error in ONNX to TF conversion: {e}")
-        raise
+        print(f"[EXPORT] onnx-tf failed: {e}")
+        print(f"[EXPORT] Falling back to onnx2tf...")
+
+    # Fall back to onnx2tf if onnx-tf failed
+    if not conversion_success:
+        try:
+            import onnx2tf
+            onnx_model = onnx.load(str(onnx_path))
+
+            onnx2tf.convert(
+                input_onnx_file_path=str(onnx_path),
+                output_folder_path=str(tf_model_dir),
+                non_verbose=False,
+                output_integer_quantized_tflite=False,
+                quant_type='per-tensor',
+                batch_size=1
+            )
+            print(f"[EXPORT] onnx2tf conversion successful!")
+            conversion_success = True
+        except Exception as e2:
+            print(f"[EXPORT] Error in ONNX to TF conversion: {e2}")
+            raise RuntimeError(f"Both onnx-tf and onnx2tf failed. onnx-tf: {e}, onnx2tf: {e2}")
+
+    if not conversion_success:
+        raise RuntimeError("Failed to convert ONNX to TensorFlow SavedModel")
+
+    print(f"[EXPORT] TensorFlow SavedModel created")
 
     # Then convert TensorFlow SavedModel to TensorFlow.js
     tfjs_model_dir = output_dir / "tfjs_model"
@@ -172,17 +245,15 @@ def test_exported_model(pytorch_policy, test_input):
     print("[EXPORT] Testing exported model...")
 
     with torch.no_grad():
-        output = pytorch_policy(test_input)
-        # Get action probabilities
-        if hasattr(output, 'distribution'):
-            action_probs = output.distribution.probs
-        elif isinstance(output, tuple):
-            action_probs = torch.softmax(output[0], dim=-1)
-        else:
-            action_probs = torch.softmax(output, dim=-1)
+        # Get logits from the policy network
+        logits = pytorch_policy(test_input)
 
-        print(f"[EXPORT] Model output shape: {action_probs.shape}")
-        print(f"[EXPORT] Action probabilities: {action_probs.cpu().numpy()}")
+        # Convert logits to probabilities
+        action_probs = torch.softmax(logits, dim=-1)
+
+        print(f"[EXPORT] Model output shape: {logits.shape}")
+        print(f"[EXPORT] Logits: {logits[0].cpu().numpy()}")
+        print(f"[EXPORT] Action probabilities: {action_probs[0].cpu().numpy()}")
 
     print("[EXPORT] Model test successful!")
     return action_probs
@@ -197,14 +268,31 @@ if __name__ == "__main__":
     4. Convert to TensorFlow.js
     5. Test exported model
     """
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Export RL model to TensorFlow.js')
+    parser.add_argument('--model-path', type=str, help='Path to the trained model .zip file')
+    parser.add_argument('--output-dir', type=str, help='Output directory for exported model')
+    args = parser.parse_args()
+
     print("=" * 60)
     print("RL PLATFORMER MODEL EXPORT")
     print("=" * 60)
 
     # Paths
     base_dir = Path(__file__).parent.parent
-    model_path = base_dir / "models" / "platformer_agent.zip"
-    export_dir = base_dir / "models" / "exported"
+
+    # Use command-line args if provided, otherwise use defaults
+    if args.model_path:
+        model_path = Path(args.model_path)
+    else:
+        model_path = base_dir / "models" / "platformer_agent.zip"
+
+    if args.output_dir:
+        export_dir = Path(args.output_dir)
+    else:
+        export_dir = base_dir / "models" / "exported"
+
     onnx_path = export_dir / "model.onnx"
 
     # Create export directory

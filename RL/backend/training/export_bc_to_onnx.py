@@ -44,12 +44,14 @@ def export_bc_to_onnx(checkpoint_path, output_path):
     print(f"[BC-EXPORT] Output path: {output_path}")
 
     # Export to ONNX
+    # Using opset_version=13 for better compatibility with onnxruntime-web
+    # (opset 18 is not supported by torch.onnx.export, max is 17)
     torch.onnx.export(
         model,
         dummy_input,
         output_path,
         export_params=True,
-        opset_version=18,
+        opset_version=13,
         do_constant_folding=True,
         input_names=['state_features'],
         output_names=['action_probs'],
