@@ -9,16 +9,15 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
 os.environ['USE_TF'] = '0'  # Disable TensorFlow in transformers
 os.environ['USE_TORCH'] = '1'  # Enable PyTorch in transformers
 
+# Import the mock torchvision module BEFORE anything else to prevent import errors
+try:
+    from . import torchvision_mock
+except ImportError:
+    pass
+
 import sys
 import warnings
 warnings.filterwarnings('ignore')
-
-# Suppress torchvision import warnings
-try:
-    import torch
-    torch.cuda.is_available()  # Trigger torch initialization
-except Exception:
-    pass
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
