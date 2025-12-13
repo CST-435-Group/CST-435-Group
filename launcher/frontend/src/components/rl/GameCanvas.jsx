@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapGenerator } from './MapGenerator'
 import { Player } from './Player'
-import AIPlayer from './AIPlayer'
+import { AIGameInstance } from './AIGameInstance'
 import { rlAPI } from '../../services/api'
 import './GameCanvas.css'
 
@@ -61,16 +61,13 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
   // Game objects
   const gameRef = useRef({
     player: null,
-    aiPlayer: null,
-    aiAgent: null,
+    aiInstance: null, // Separate game instance for AI
     map: null,
+    mapSeed: null, // Store seed for AI instance
     cameraX: 0,
     keys: {},
     lastTime: 0,
     animationFrame: null,
-    aiActionCooldown: 0,
-    aiLastAction: 0, // Cache last AI action to avoid async in game loop
-    aiPredicting: false, // Track if AI prediction is in progress
     startTime: 0,
     elapsedTime: 0
   })
@@ -82,79 +79,60 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     const ctx = canvas.getContext('2d')
     const game = gameRef.current
 
-    // Store canvas in game object for AI player rendering
+    // Store canvas in game object
     game.canvas = canvas
 
-    // Initialize game
+    // Initialize game with seeded map (so AI can use same map)
     const mapGen = new MapGenerator(1920, 1080, 32)
-    game.map = mapGen.generateMap(null, difficulty) // Pass difficulty to map generator
+    game.mapSeed = Date.now() // Generate seed once
+    game.map = mapGen.generateMap(game.mapSeed, difficulty)
 
-    // Create player at spawn position (map generator provides correct coordinates)
+    // Create player at spawn position
     game.player = new Player(game.map.spawn.x, game.map.spawn.y)
     console.log('[GAME] Player spawned at:', game.map.spawn.x, game.map.spawn.y)
+    console.log('[GAME] Map seed:', game.mapSeed)
 
     game.cameraX = 0
-    game.jumpKeyWasPressed = false // Track if jump key was already pressed
+    game.jumpKeyWasPressed = false
 
     // Add references for BC model feature extraction
     game.difficulty = difficulty
     game.enemies = game.map.enemies
     game.goal = game.map.goal
 
-    // Initialize AI if enabled
+    // Initialize AI if enabled - uses separate game instance
     if (enableAI) {
       console.log('\n🤖 ═══════════ AI INITIALIZATION STARTED ═══════════')
-      console.log('[AI-INIT] Creating AI player...')
-      game.aiPlayer = new Player(game.map.spawn.x, game.map.spawn.y - 50) // Start slightly above
-      console.log('[AI-INIT] AI player created at position:', game.map.spawn.x, game.map.spawn.y - 50)
+      console.log('[AI-INIT] Creating separate AI game instance...')
+      console.log('[AI-INIT] AI will run in isolated environment')
+      console.log('[AI-INIT] AI will use same map (seed:', game.mapSeed, ')')
+      console.log('[AI-INIT] Model path:', modelPath)
 
-      console.log('[AI-INIT] Creating AI agent instance...')
-      game.aiAgent = new AIPlayer()
-      console.log('[AI-INIT] AI agent instance created')
-
-      game.aiActionCooldown = 0
-
-      // Load AI model with progress tracking
       updateAiStatus('loading')
       setLoadingProgress(0)
       setLoadingMessage('Initializing AI...')
 
-      console.log('[AI-INIT] Starting model load...')
-      console.log('[AI-INIT] Model path:', modelPath)
-      console.log('[AI-INIT] Model format detection:', modelPath.endsWith('.onnx') ? 'ONNX' : 'TensorFlow.js')
+      // Create separate map for AI using same seed
+      const aiMapGen = new MapGenerator(1920, 1080, 32)
+      const aiMap = aiMapGen.generateMap(game.mapSeed, difficulty)
 
-      // Progress callback
-      const onProgress = (progress, message) => {
-        console.log(`[AI-LOADING] ${progress}% - ${message}`)
-        setLoadingProgress(progress)
-        setLoadingMessage(message)
+      // Create AI instance with callbacks for status updates
+      const onAIReady = () => {
+        console.log('✅ [AI-READY] AI opponent loaded and ready!')
+        updateAiStatus('ready')
+        setLoadingProgress(100)
+        setLoadingMessage('AI Ready!')
       }
 
-      console.log('[AI-INIT] Calling loadModel()...')
-      game.aiAgent.loadModel(modelPath, onProgress)
-        .then(success => {
-          console.log('[AI-LOADING] loadModel() promise resolved, success:', success)
-          if (success) {
-            console.log('[AI-LOADING] Setting aiStatus to "ready"')
-            updateAiStatus('ready')
-            console.log('✅ [AI-READY] AI opponent loaded and ready!')
-            console.log('[AI-READY] Model info:', game.aiAgent.getModelInfo())
-          } else {
-            updateAiStatus('error')
-            setLoadingMessage('Failed to load AI model')
-            console.error('❌ [AI-ERROR] Failed to load AI model (success=false)')
-          }
-        })
-        .catch(err => {
-          updateAiStatus('error')
-          setLoadingMessage(`Error: ${err.message}`)
-          console.error('❌ [AI-ERROR] AI loading exception:', err)
-          console.error('[AI-ERROR] Error name:', err.name)
-          console.error('[AI-ERROR] Error message:', err.message)
-          console.error('[AI-ERROR] Error stack:', err.stack)
-        })
+      const onAIError = (errorMsg) => {
+        console.error('❌ [AI-ERROR] AI failed:', errorMsg)
+        updateAiStatus('error')
+        setLoadingMessage(`Error: ${errorMsg}`)
+      }
 
-      console.log('[AI-INIT] Model loading initiated (promise pending)')
+      game.aiInstance = new AIGameInstance(aiMap, modelPath, difficulty, onAIReady, onAIError)
+
+      console.log('[AI-INIT] AI instance created')
       console.log('🤖 ════════════════════════════════════════════════\n')
     } else {
       console.log('[AI-INIT] AI disabled by user, skipping initialization')
@@ -271,7 +249,9 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       // Collect gameplay data for score validation (ALWAYS when player is alive)
       // Also collect for AI training when not playing against AI
       if (game.player.isAlive) {
-        frameNumberRef.current++
+        // Calculate frame number based on elapsed time at 60 FPS (not loop iterations)
+        // This ensures frame count matches time for backend validation
+        frameNumberRef.current = Math.floor(game.elapsedTime * 60)
 
         // Extract state features
         const stateFeatures = extractStateFeatures(game)
@@ -327,17 +307,18 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       // Check game state
       const humanWon = game.player.checkGoalReached(game.map.goal)
       const humanLost = !game.player.isAlive
-      const aiWon = enableAI && game.aiPlayer && game.aiPlayer.checkGoalReached(game.map.goal)
-      const aiLost = enableAI && game.aiPlayer && !game.aiPlayer.isAlive
+      const aiWon = enableAI && game.aiInstance && game.aiInstance.checkGoalReached()
+      const aiLost = enableAI && game.aiInstance && !game.aiInstance.getAIPosition().isAlive
 
       if (humanWon || (enableAI && aiLost)) {
         const finalTime = game.elapsedTime
         setGameState('won')
+        const aiPos = game.aiInstance ? game.aiInstance.getAIPosition() : null
         const finalStats = {
           score: game.player.score,
           distance: Math.floor(game.player.distance / DISTANCE_SCALE),
-          aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance / DISTANCE_SCALE) : 0,
+          aiScore: aiPos ? aiPos.score : 0,
+          aiDistance: aiPos ? Math.floor(aiPos.distance / DISTANCE_SCALE) : 0,
           time: finalTime
         }
         setStats(finalStats)
@@ -373,11 +354,12 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       } else if (humanLost || (enableAI && aiWon)) {
         const finalTime = game.elapsedTime
         setGameState('lost')
+        const aiPos = game.aiInstance ? game.aiInstance.getAIPosition() : null
         const finalStats = {
           score: game.player.score,
           distance: Math.floor(game.player.distance / DISTANCE_SCALE),
-          aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-          aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance / DISTANCE_SCALE) : 0,
+          aiScore: aiPos ? aiPos.score : 0,
+          aiDistance: aiPos ? Math.floor(aiPos.distance / DISTANCE_SCALE) : 0,
           time: finalTime
         }
         setStats(finalStats)
@@ -431,6 +413,10 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       canvas.removeEventListener('blur', handleBlur)
       if (game.animationFrame) {
         cancelAnimationFrame(game.animationFrame)
+      }
+      // Cleanup AI instance
+      if (game.aiInstance) {
+        game.aiInstance.dispose()
       }
     }
   }, [])
@@ -505,105 +491,19 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       }
     })
 
-    // Update AI player
-    if (enableAI && game.aiPlayer && game.aiAgent && game.aiAgent.isReady()) {
-      updateAIPlayer(game, game.canvas)
-    } else if (enableAI && game.aiPlayer && game.aiAgent && !game.aiAgent.isReady()) {
-      // Log once when AI is not ready
-      if (!game.aiNotReadyLogged) {
-        console.log('[GAME] AI not ready yet - isLoaded:', game.aiAgent.isLoaded)
-        game.aiNotReadyLogged = true
-      }
+    // Update AI instance (runs in separate isolated environment)
+    if (enableAI && game.aiInstance) {
+      game.aiInstance.update(deltaTime)
     }
 
     // Update stats display
+    const aiPos = game.aiInstance ? game.aiInstance.getAIPosition() : null
     setStats({
       score: player.score,
       distance: Math.floor(player.distance / DISTANCE_SCALE),
-      aiScore: game.aiPlayer ? game.aiPlayer.score : 0,
-      aiDistance: game.aiPlayer ? Math.floor(game.aiPlayer.distance / DISTANCE_SCALE) : 0,
+      aiScore: aiPos ? aiPos.score : 0,
+      aiDistance: aiPos ? Math.floor(aiPos.distance / DISTANCE_SCALE) : 0,
       time: game.elapsedTime || 0
-    })
-  }
-
-  const updateAIPlayer = (game, canvas) => {
-    const { aiPlayer, aiAgent, map } = game
-
-    if (!aiPlayer.isAlive) {
-      return
-    }
-
-    // AI action cooldown (predict every N frames to reduce computational load)
-    game.aiActionCooldown--
-    if (game.aiActionCooldown <= 0) {
-      game.aiActionCooldown = 3 // Predict every 3 frames
-
-      // Start async prediction in background (non-blocking)
-      if (!game.aiPredicting) {
-        game.aiPredicting = true
-        aiAgent.predictAction(canvas, aiPlayer.x, game.cameraX, game, aiPlayer)
-          .then(action => {
-            game.aiLastAction = action
-            game.aiPredicting = false
-          })
-          .catch(error => {
-            console.error('[GAME] AI prediction error:', error)
-            game.aiPredicting = false
-          })
-      }
-    }
-
-    // Apply cached action (synchronous, no blocking)
-    const action = game.aiLastAction
-    aiPlayer.stopMovement()
-
-    switch (action) {
-      case 1: // Left
-        aiPlayer.moveLeft()
-        break
-      case 2: // Right
-        aiPlayer.moveRight()
-        break
-      case 3: // Jump (straight up)
-        aiPlayer.jump()
-        break
-      case 4: // Sprint + Right
-        aiPlayer.sprint(true)
-        aiPlayer.moveRight()
-        break
-      case 5: // Duck
-        aiPlayer.duck(true)
-        break
-      case 6: // Jump + Left
-        aiPlayer.jump()
-        aiPlayer.moveLeft()
-        break
-      case 7: // Jump + Right
-        aiPlayer.jump()
-        aiPlayer.moveRight()
-        break
-      case 8: // Sprint + Jump + Right
-        aiPlayer.sprint(true)
-        aiPlayer.jump()
-        aiPlayer.moveRight()
-        break
-      default: // Idle
-        break
-    }
-
-    // Update AI player physics
-    aiPlayer.update(map.platforms, 1)
-
-    // Check coin collection for AI
-    map.coins.forEach(coin => {
-      aiPlayer.collectCoin(coin)
-    })
-
-    // Check enemy collisions for AI
-    map.enemies.forEach(enemy => {
-      if (aiPlayer.checkEnemyCollision(enemy)) {
-        aiPlayer.die()
-      }
     })
   }
 
@@ -683,18 +583,21 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     ctx.font = 'bold 14px Arial'
     ctx.fillText('YOU', player.x + 2, player.y - 5)
 
-    // Draw AI player if enabled
-    if (enableAI && game.aiPlayer) {
-      ctx.fillStyle = '#FF6B6B' // Red for AI
-      ctx.fillRect(game.aiPlayer.x, game.aiPlayer.y, game.aiPlayer.width, game.aiPlayer.height)
-      ctx.strokeStyle = '#000'
-      ctx.lineWidth = 2
-      ctx.strokeRect(game.aiPlayer.x, game.aiPlayer.y, game.aiPlayer.width, game.aiPlayer.height)
+    // Draw AI player if enabled (from separate AI game instance)
+    if (enableAI && game.aiInstance) {
+      const aiPos = game.aiInstance.getAIPosition()
+      if (aiPos && aiPos.isAlive) {
+        ctx.fillStyle = '#FF6B6B' // Red for AI
+        ctx.fillRect(aiPos.x, aiPos.y, aiPos.width, aiPos.height)
+        ctx.strokeStyle = '#000'
+        ctx.lineWidth = 2
+        ctx.strokeRect(aiPos.x, aiPos.y, aiPos.width, aiPos.height)
 
-      // Draw AI label
-      ctx.fillStyle = '#FFFFFF'
-      ctx.font = 'bold 14px Arial'
-      ctx.fillText('AI', game.aiPlayer.x + 6, game.aiPlayer.y - 5)
+        // Draw AI label
+        ctx.fillStyle = '#FFFFFF'
+        ctx.font = 'bold 14px Arial'
+        ctx.fillText('AI', aiPos.x + 6, aiPos.y - 5)
+      }
     }
 
     // Restore context
@@ -708,7 +611,9 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
     }
 
     // Draw UI (fixed position)
-    if (enableAI && game.aiPlayer) {
+    if (enableAI && game.aiInstance) {
+      const aiPos = game.aiInstance.getAIPosition()
+
       // Split view: Human on left, AI on right
       ctx.fillStyle = 'rgba(76, 175, 80, 0.9)' // Green for human
       ctx.fillRect(10, 10, 300, 120)
@@ -728,8 +633,8 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       ctx.font = 'bold 18px Arial'
       ctx.fillText('AI Opponent', canvas.width - 290, 35)
       ctx.font = 'bold 16px Arial'
-      ctx.fillText(`Score: ${game.aiPlayer.score}`, canvas.width - 290, 60)
-      ctx.fillText(`Distance: ${Math.floor(game.aiPlayer.distance / DISTANCE_SCALE)}m`, canvas.width - 290, 85)
+      ctx.fillText(`Score: ${aiPos ? aiPos.score : 0}`, canvas.width - 290, 60)
+      ctx.fillText(`Distance: ${aiPos ? Math.floor(aiPos.distance / DISTANCE_SCALE) : 0}m`, canvas.width - 290, 85)
 
       // Show episode number if playing against episode model
       if (playingEpisode !== null) {
@@ -936,7 +841,7 @@ export default function GameCanvas({ onGameEnd, enableAI = false, episodeModelPa
       {gameState !== 'playing' && (
         <div className="game-overlay">
           <div className="game-result">
-            <h2>{gameState === 'won' ? '🎉 You Win!' : (enableAI ? '🤖 AI Wins!' : '💀 Game Over')}</h2>
+            <h2>{enableAI ? (stats.distance > stats.aiDistance ? '🎉 You Win!' : '🤖 AI Wins!') : (gameState === 'won' ? '🎉 You Win!' : '💀 Game Over')}</h2>
 
             {enableAI ? (
               <div className="final-stats-race">
