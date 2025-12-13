@@ -1,0 +1,21 @@
+{
+  "project": "gan",
+  "chosen_instance": "g4dn.xlarge",
+  "median_inference_s": 0.25,
+  "instance_throughput_per_sec": 4.0,
+  "monthly_capacity": 10368000.0,
+  "cost_per_inference": 1.25e-06,
+  "model_size_gb": 0.5,
+  "training_cost": 150.0,
+  "storage_cost": 0.5,
+  "cost_10000_per_day": 125.0,
+  "instances_10000_per_day": 1,
+  "cost_100000_per_day": 145.0,
+  "instances_100000_per_day": 2,
+  "cost_1000000_per_day": 375.0,
+  "instances_1000000_per_day": 3,
+  "monthly_inference_cost": 125.0,
+  "monthly_data_transfer_cost": 2.5,
+  "monthly_misc": 0.5,
+  "total_over_deployment": 278.5
+}

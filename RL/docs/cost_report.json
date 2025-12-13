@@ -1,0 +1,21 @@
+{
+  "project": "rl",
+  "chosen_instance": "t3.medium",
+  "median_inference_s": 0.02,
+  "instance_throughput_per_sec": 50.0,
+  "monthly_capacity": 129600000.0,
+  "cost_per_inference": 2.5e-07,
+  "model_size_gb": 0.1,
+  "training_cost": 50.0,
+  "storage_cost": 0.1,
+  "cost_10000_per_day": 32.0,
+  "instances_10000_per_day": 1,
+  "cost_100000_per_day": 35.0,
+  "instances_100000_per_day": 1,
+  "cost_1000000_per_day": 65.0,
+  "instances_1000000_per_day": 1,
+  "monthly_inference_cost": 32.0,
+  "monthly_data_transfer_cost": 0.3,
+  "monthly_misc": 0.1,
+  "total_over_deployment": 82.5
+}
