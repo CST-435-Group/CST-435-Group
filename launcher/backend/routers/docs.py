@@ -11,7 +11,10 @@ PROJECT_MAP = {
     'ann': 'ANN_Project',
     'cnn': 'CNN_Project',
     'nlp': 'NLP',
-    'rnn': 'rnn-text-generator'
+    'rnn': 'rnn-text-generator',
+    'ga': 'AIT-204-Genetic-Alg',
+    'gan': 'GAN',
+    'rl': 'RL'
 }
 
 
